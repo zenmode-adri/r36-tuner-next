@@ -824,6 +824,29 @@ static void fmt_mv(int uv, char *buf, int bufsz) {
     else                  snprintf(buf, bufsz, "%d",   uv/1000);
 }
 
+/* Format a large score with K/M/G suffixes and ~3 significant digits. */
+static void fmt_score(long long val, char *buf, int bufsz) {
+    if (val < 0) val = 0;
+    if (val < 1000) {
+        snprintf(buf, bufsz, "%lld", val);
+    } else if (val < 1000000) {
+        double v = val / 1000.0;
+        if (v < 10)       snprintf(buf, bufsz, "%.2fK", v);
+        else if (v < 100) snprintf(buf, bufsz, "%.1fK", v);
+        else              snprintf(buf, bufsz, "%.0fK", v);
+    } else if (val < 1000000000LL) {
+        double v = val / 1000000.0;
+        if (v < 10)       snprintf(buf, bufsz, "%.2fM", v);
+        else if (v < 100) snprintf(buf, bufsz, "%.1fM", v);
+        else              snprintf(buf, bufsz, "%.0fM", v);
+    } else {
+        double v = val / 1000000000.0;
+        if (v < 10)       snprintf(buf, bufsz, "%.2fG", v);
+        else if (v < 100) snprintf(buf, bufsz, "%.1fG", v);
+        else              snprintf(buf, bufsz, "%.0fG", v);
+    }
+}
+
 static void show_info(const char *title, const char *msg) {
     draw_bg(); draw_header(title, NULL);
     txt(fnt_med, msg, 28, 90, 200, 210, 240);
@@ -1844,7 +1867,7 @@ static int screen_cpu_benchmark_result(BenchState *st) {
 
     int t_avg = st->temp_count > 0 ? st->temp_sum / st->temp_count : 0;
     char score_str[32];
-    snprintf(score_str, sizeof(score_str), "%lld", st->score);
+    fmt_score(st->score, score_str, sizeof(score_str));
 
     while (running) {
         Keys k = poll_keys();
