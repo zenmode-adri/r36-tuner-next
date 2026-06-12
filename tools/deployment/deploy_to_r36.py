@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""deploy_to_r36.py — deploy r36-tuner/R36 Tuner.sh to the R36S."""
+"""deploy_to_r36.py — deploy r36-tuner/R36 Tuner Next.sh to the R36S."""
 
 import os
 import sys
@@ -9,9 +9,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 from r36_ssh import connect
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-SCRIPT = os.path.join(ROOT, "r36-tuner", "R36 Tuner.sh")
+SCRIPT = os.path.join(ROOT, "r36-tuner", "R36 Tuner Next.sh")
 REMOTE = "/tmp/R36Tuner_update.sh"
-DEST = "/opt/system/R36 Tuner.sh"
+DEST = "/opt/system/R36 Tuner Next.sh"
 CHUNK = 524288  # 512 KB
 
 

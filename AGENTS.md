@@ -4,7 +4,7 @@
 
 ## 1. Project Overview
 
-Hardware tuning suite for the R36S handheld (Rockchip RK3326 / PX30, dArkOSRE-R36). Primary deliverable: `r36-tuner/R36 Tuner.sh`, a self-contained Bash script. This workspace contains the host-side toolchain (Python, C, firmware, deployment scripts).
+Hardware tuning suite for the R36S handheld (Rockchip RK3326 / PX30, dArkOSRE-R36). Primary deliverable: `r36-tuner/R36 Tuner Next.sh`, a self-contained Bash script. This workspace contains the host-side toolchain (Python, C, firmware, deployment scripts).
 
 > **Terminology:** When the user says "la consola" or "the console", they mean the R36S device itself.
 
@@ -25,7 +25,7 @@ No top-level build system. Build with direct `gcc` / `aarch64-linux-gnu-gcc` inv
 ## 3. Repository Layout
 
 ```
-r36-tuner/          Main product: R36 Tuner.sh, README, CHANGELOG, docs/opp-research.md
+r36-tuner/          Main product: R36 Tuner Next.sh, README, CHANGELOG, docs/opp-research.md
 src/ui/tuner_ui/    SDL2/TTF graphical UI (experimental, Spanish strings)
 src/overlay/        LD_PRELOAD overlay (r36_overlay.c)
 src/benchmark/      dmc_bench.c, dmc_stress.c
@@ -80,8 +80,8 @@ python tools/deployment/deploy_overlay.py     # overlay .so
 
 Manual fallback (for humans only; internal tools use paramiko):
 ```bash
-scp "r36-tuner/R36 Tuner.sh" ark@<ip>:/opt/system/
-ssh ark@<ip> "chmod +x '/opt/system/R36 Tuner.sh'"
+scp "r36-tuner/R36 Tuner Next.sh" ark@<ip>:/opt/system/
+ssh ark@<ip> "chmod +x '/opt/system/R36 Tuner Next.sh'"
 ```
 
 > Internally, always prefer `r36_ssh.py` / paramiko over shelling out to `ssh`/`scp`. This ensures consistent credential handling, UTF-8 encoding, and reliable sudo password injection.
@@ -94,7 +94,7 @@ ssh ark@<ip> "chmod +x '/opt/system/R36 Tuner.sh'"
 
 ## 7. Testing
 
-- On-device benchmarks and stress tests inside `R36 Tuner.sh`.
+- On-device benchmarks and stress tests inside `R36 Tuner Next.sh`.
 - Host audits: `tools/diagnostics/audit_device.py`.
 - Sweeps: `tools/undervolt/auto_sweep.py`, `tools/undervolt/voltage_sweep.py`.
 
@@ -109,11 +109,11 @@ ssh ark@<ip> "chmod +x '/opt/system/R36 Tuner.sh'"
 
 ## 9. Release Process
 
-1. Bump `VERSION` in `r36-tuner/R36 Tuner.sh`.
+1. Bump `VERSION` in `r36-tuner/R36 Tuner Next.sh`.
 2. Update `r36-tuner/CHANGELOG.md`.
 3. Deploy and test on device.
 4. Run `tools/diagnostics/audit_device.py`.
-5. Tag and release via `tools/release/create_release.py`. Artifact: `R36 Tuner.sh` only.
+5. Tag and release via `tools/release/create_release.py`. Artifact: `R36 Tuner Next.sh` only.
 
 ## 10. Quick Reference
 

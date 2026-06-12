@@ -11,7 +11,7 @@ def run(cmd, timeout=120):
 # Use InstallGlmark2Legacy() from the script itself to set up /tmp/glmark2data
 print('=== InstallGlmark2Legacy via script ===')
 # Source the script and call the function (skip the TUI parts)
-setup_cmd = '''bash -c 'source "/opt/system/R36 Tuner.sh" 2>/dev/null; InstallGlmark2Legacy; echo "exit:$?"' '''
+setup_cmd = '''bash -c 'source "/opt/system/R36 Tuner Next.sh" 2>/dev/null; InstallGlmark2Legacy; echo "exit:$?"' '''
 r = run(f'echo ark | sudo -S {setup_cmd}', timeout=60)
 print(r[-500:] if len(r) > 500 else r)
 

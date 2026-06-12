@@ -281,11 +281,11 @@ else
     warn "glmark2 legacy not extracted yet (/tmp/glmark2-es2-drm-legacy missing)"
     echo "    → Will be extracted + verified on first GPU benchmark/validate run"
     # Check it's embedded in the script
-    script_path="/opt/system/R36 Tuner.sh"
+    script_path="/opt/system/R36 Tuner Next.sh"
     if grep -q "__GLMARK2_LEGACY_START__" "$script_path" 2>/dev/null; then
         ok "GLMARK2_LEGACY embedded in deployed script"
     else
-        warn "Cannot verify embedding — script not at /opt/system/R36 Tuner.sh or markers missing"
+        warn "Cannot verify embedding — script not at /opt/system/R36 Tuner Next.sh or markers missing"
     fi
 fi
 

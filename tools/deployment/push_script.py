@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""push_script.py — deploy R36 Tuner.sh with size verification."""
+"""push_script.py — deploy R36 Tuner Next.sh with size verification."""
 
 import os
 import sys
@@ -8,9 +8,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 from r36_ssh import connect
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-LOCAL = os.path.join(ROOT, "r36-tuner", "R36 Tuner.sh")
+LOCAL = os.path.join(ROOT, "r36-tuner", "R36 Tuner Next.sh")
 REMOTE_TMP = "/tmp/R36Tuner_update.sh"
-REMOTE_FINAL = "/opt/system/R36 Tuner.sh"
+REMOTE_FINAL = "/opt/system/R36 Tuner Next.sh"
 CHUNK = 524288
 
 

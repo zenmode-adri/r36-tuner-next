@@ -14,7 +14,7 @@ Python/C helpers that run on the development host and talk to the R36S over SSH.
 
 | Script | Purpose |
 |---|---|
-| `deployment/deploy_to_r36.py` | Upload and install `r36-tuner/R36 Tuner.sh` to `/opt/system/`. |
+| `deployment/deploy_to_r36.py` | Upload and install `r36-tuner/R36 Tuner Next.sh` to `/opt/system/`. |
 | `deployment/deploy_ui.py` | Upload `bin/tuner_ui` and launcher scripts to `/opt/system/`. |
 | `deployment/deploy_overlay.py` | Upload `bin/libr36overlay*.so` to `/usr/local/lib/` and install launcher. |
 | `deployment/push_script.py` / `push_to_r36.py` | One-off script push helpers (legacy, being consolidated into `deploy_to_r36.py`). |
