@@ -296,6 +296,22 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_DPAD_VOLTAGE] = { "[DPAD] Voltage", "[DPAD] Voltaje" },
     [STR_A_APPLY_B_BACK] = { "[A] Apply  [B] Back", "[A] Aplicar  [B] Atras" },
     [STR_DTB_PATCHED] = { "DTB PATCHED", "DTB PARCHEADO" },
+    [STR_BENCHMARK_CPU] = { "CPU Benchmark", "Benchmark CPU" },
+    [STR_BENCHMARK_RAM] = { "RAM Benchmark", "Benchmark RAM" },
+    [STR_BENCHMARK_GPU] = { "GPU Benchmark", "Benchmark GPU" },
+    [STR_BENCHMARK_HISTORY] = { "Score History", "Historial de puntuaciones" },
+    [STR_BENCHMARK_CPU_TITLE] = { "CPU Benchmark", "Benchmark CPU" },
+    [STR_BENCHMARK_CPU_RUNNING] = { "Running integer ALU benchmark...", "Ejecutando benchmark ALU entero..." },
+    [STR_BENCHMARK_CPU_PLEASE_WAIT] = { "Please wait ~30s", "Espera ~30s" },
+    [STR_BENCHMARK_CPU_RESULT] = { "Result", "Resultado" },
+    [STR_BENCHMARK_CPU_SCORE] = { "Score", "Puntuacion" },
+    [STR_BENCHMARK_CPU_MOPS] = { "Mops/30s", "Mops/30s" },
+    [STR_BENCHMARK_CPU_TEMP] = { "Temperature", "Temperatura" },
+    [STR_BENCHMARK_CPU_GCC_MISSING] = { "gcc not found. Install: apt install gcc", "gcc no encontrado. Instala: apt install gcc" },
+    [STR_BENCHMARK_CPU_SET_BASELINE] = { "Baseline set", "Linea base guardada" },
+    [STR_BENCHMARK_CPU_VS_BASELINE] = { "vs baseline", "vs linea base" },
+    [STR_BENCHMARK_CPU_BACK] = { "Back", "Atras" },
+    [STR_BENCHMARK_NOT_IMPLEMENTED] = { "Not implemented yet", "No implementado aun" },
 };
 
 static int current_lang = LANG_EN;
