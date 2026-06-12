@@ -15,6 +15,19 @@
 - Added `r36-tuner/docs/kernel-build.md` with permanent build notes for the patched teacupx kernel.
 - Added `tools/README.md` as a quick index of host-side scripts.
 
+**SDL2 UI (`src/ui/tuner_ui/main.c`):**
+
+- Feat: Window title and header renamed from `R36 Tuner` to `R36 Tuner Next`; product subtitle left unchanged.
+- Feat: Dynamic OS subtitle reads `/etc/hostname` and shows `RK3326 | DARKOSRE`, `RK3326 | DARKOS`, `RK3326 | ARKOS`, etc.
+- Feat: ES/EN i18n system with `StringID` enum, `S(id)` macro, and persistence in `/etc/r36_tuner_ui_lang`. Default language is English; added a main-menu language selector.
+- UI: `submenu()` now supports a `center` flag so most lists (governor, DTB tuning, voltage selectors, recovery) are vertically centered, while CPU/GPU max-frequency lists keep top alignment.
+- UI: Confirmation screens replaced simple Yes/No dialogs with `confirm_screen()` showing a summary, optional data table, warnings, infos, and large Apply/Cancel buttons for CPU UV, CPU OC, GPU OC, RAM OC, restore, and reboot prompts.
+- UI: OPP diagnostic screen renamed to `OPP Voltage Table`, converted to a read-only styled table, and now compares DTB on-disk voltages against kernel-active voltages in three columns: `Frequency | DTB (disk) | Kernel (now)`. Rows with mismatched voltages are highlighted.
+- UI: Recovery screen converted from a fake selectable table to a read-only scrollable instructions view.
+- Fix: Main menu item-height calculation adjusted so the new Language item is not cut off.
+- Fix: `tools/deployment/deploy_ui.py` now stops any running `tuner_ui` process before overwriting `/opt/system/tuner_ui`.
+- Fix: `tools/deployment/r36_ssh.py` tolerates `chmod: Operation not permitted` when the destination binary is busy/running, as long as the uploaded file already has the requested mode.
+
 **Bug fixes:**
 
 - Fix: RAM OC confirm dialog showed "9280 MHz" instead of "928 MHz" due to `${FREQ_HZ:0:4}` string slice (928000000[:4] = "9280"). Changed to `$(( FREQ_HZ / 1000000 ))`.
