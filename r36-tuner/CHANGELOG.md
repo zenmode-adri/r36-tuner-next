@@ -31,7 +31,8 @@
 - Feat: Native RAM benchmark added to the SDL2 UI (`screen_ram_benchmark()`). Compiles and runs the same 128 MB memset/memcpy bandwidth test as `R36 Tuner.sh` and shows write/copy MB/s plus temperatures.
 - UI: Redesigned CPU benchmark result screen with a central panel, large score, temperature initial/avg/peak row, color-coded baseline comparison, and Run Again / Back buttons.
 - UI: Added `fmt_score()` helper to render large numbers with K/M/G suffixes and ~3 significant digits (e.g. `1247` → `1.25K`). Applied to CPU and RAM benchmark results.
-- Feat: A new Benchmark submenu is reachable from the main menu; GPU and history entries are placeholders for now.
+- Feat: Benchmark history view (`screen_benchmark_history()`). CPU and RAM results are appended to `/etc/r36_tuner_ui_scores.log` and can be viewed from the Benchmark submenu.
+- Feat: A new Benchmark submenu is reachable from the main menu; GPU entry is a placeholder for now.
 
 **Bug fixes:**
 
