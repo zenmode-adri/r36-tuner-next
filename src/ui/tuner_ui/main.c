@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <dirent.h>
 #include <time.h>
+#include <sys/stat.h>
 
 /* ── Paths ──────────────────────────────────────────────────────────────── */
 #define FONT_BOLD  "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -174,6 +175,16 @@ typedef enum {
     STR_BENCHMARK_RAM_RESULT,
     STR_BENCHMARK_RAM_MBPS,
     STR_BENCHMARK_RAM_GCC_MISSING,
+    STR_BENCHMARK_GPU_TITLE,
+    STR_BENCHMARK_GPU_NOT_INSTALLED,
+    STR_BENCHMARK_GPU_INSTALL,
+    STR_BENCHMARK_GPU_INSTALLING,
+    STR_BENCHMARK_GPU_RUNNING,
+    STR_BENCHMARK_GPU_PENDING,
+    STR_BENCHMARK_GPU_RESULT,
+    STR_BENCHMARK_GPU_PTS,
+    STR_BENCHMARK_GPU_FAILED,
+    STR_BENCHMARK_GPU_BLACK_SCREEN,
     STR_BENCHMARK_HISTORY_TITLE,
     STR_BENCHMARK_HISTORY_EMPTY,
     STR_BENCHMARK_HISTORY_CLEAR,
@@ -331,6 +342,16 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_BENCHMARK_RAM_RESULT] = { "Result", "Resultado" },
     [STR_BENCHMARK_RAM_MBPS] = { "MB/s", "MB/s" },
     [STR_BENCHMARK_RAM_GCC_MISSING] = { "gcc not found. Install: apt install gcc", "gcc no encontrado. Instala: apt install gcc" },
+    [STR_BENCHMARK_GPU_TITLE] = { "GPU Benchmark", "Benchmark GPU" },
+    [STR_BENCHMARK_GPU_NOT_INSTALLED] = { "glmark2-es2-drm not found.", "glmark2-es2-drm no encontrado." },
+    [STR_BENCHMARK_GPU_INSTALL] = { "Install glmark2 (~20s)?", "Instalar glmark2 (~20s)?" },
+    [STR_BENCHMARK_GPU_INSTALLING] = { "Installing glmark2...", "Instalando glmark2..." },
+    [STR_BENCHMARK_GPU_RUNNING] = { "Running glmark2 off-screen...", "Ejecutando glmark2 off-screen..." },
+    [STR_BENCHMARK_GPU_PENDING] = { "Result will appear on next launch.", "El resultado aparecera al volver a abrir." },
+    [STR_BENCHMARK_GPU_RESULT] = { "GPU Result", "Resultado GPU" },
+    [STR_BENCHMARK_GPU_PTS] = { "pts", "pts" },
+    [STR_BENCHMARK_GPU_FAILED] = { "GPU benchmark failed.", "Benchmark GPU fallido." },
+    [STR_BENCHMARK_GPU_BLACK_SCREEN] = { "Screen will go black ~1 min. Continue?", "La pantalla se apagara ~1 min. Continuar?" },
     [STR_BENCHMARK_HISTORY_TITLE] = { "Score History", "Historial de puntuaciones" },
     [STR_BENCHMARK_HISTORY_EMPTY] = { "No scores recorded yet.", "Aun no hay puntuaciones." },
     [STR_BENCHMARK_HISTORY_CLEAR] = { "Clear History", "Borrar historial" },
@@ -2666,6 +2687,8 @@ static void screen_benchmark_history(void) {
     }
 }
 
+static void screen_gpu_benchmark(void);
+
 /* ── Benchmark submenu ───────────────────────────────────────────────────── */
 static void screen_benchmark(void) {
     LItem items[4];
@@ -2691,12 +2714,161 @@ static void screen_benchmark(void) {
         switch (r) {
             case 0: screen_cpu_benchmark(); break;
             case 1: screen_ram_benchmark(); break;
+            case 2: screen_gpu_benchmark(); break;
             case 3: screen_benchmark_history(); break;
             default:
                 show_info(S(STR_BENCHMARK), S(STR_BENCHMARK_NOT_IMPLEMENTED));
                 SDL_Delay(1500);
                 break;
         }
+    }
+}
+
+/* ── GPU benchmark ───────────────────────────────────────────────────────── */
+#define GPU_BENCH_RESULT "/tmp/r36_gpu_bench_result.txt"
+#define GPU_BENCH_LOG    "/tmp/r36_gpu_bench_out.txt"
+
+static int install_glmark2(void) {
+    show_info(S(STR_BENCHMARK_GPU_TITLE), S(STR_BENCHMARK_GPU_INSTALLING));
+    SDL_RenderPresent(ren);
+    SDL_Delay(200);
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd),
+             "echo ark | sudo -S apt update >/dev/null 2>&1 && "
+             "echo ark | sudo -S apt install -y glmark2-es2-drm glmark2-data >/dev/null 2>&1");
+    int rc = system(cmd);
+    return (rc == 0 &&
+            (access("/usr/bin/glmark2-es2-drm", X_OK) == 0 ||
+             access("/usr/local/bin/glmark2-es2-drm", X_OK) == 0));
+}
+
+static void create_gpu_runner(void) {
+    FILE *f = fopen("/tmp/r36_gpu_bench_runner.sh", "w");
+    if (!f) return;
+    fprintf(f,
+        "#!/bin/bash\n"
+        "GL_LOG=%s\n"
+        "TEMP_LOG=/tmp/r36_gpu_bench_temps.txt\n"
+        "RESULT=%s\n"
+        "THERMAL=/sys/class/thermal/thermal_zone0/temp\n"
+        "get_temp() { awk '{printf \"%%.0f\",$1/1000}' \"$THERMAL\" 2>/dev/null; }\n"
+        "sleep 2\n"
+        "systemctl stop emulationstation 2>/dev/null\n"
+        "sleep 2\n"
+        "pkill -9 -x emulationstation 2>/dev/null\n"
+        "sleep 1\n"
+        "TEMP_START=$(get_temp)\n"
+        "rm -f \"$GL_LOG\" \"$TEMP_LOG\" \"$RESULT\"\n"
+        "( while true; do get_temp >> \"$TEMP_LOG\"; sleep 2; done ) &\n"
+        "SAMPLER_PID=$!\n"
+        "glmark2-es2-drm --off-screen --size 320x240 "
+        "-b build:duration=15 -b texture:duration=15 "
+        "-b shading:duration=15 -b terrain:duration=15 > \"$GL_LOG\" 2>&1\n"
+        "kill \"$SAMPLER_PID\" 2>/dev/null\n"
+        "TEMP_MAX=$(sort -n \"$TEMP_LOG\" 2>/dev/null | tail -1)\n"
+        "TEMP_AVG=$(awk '{s+=$1;n++} END{if(n>0)printf \"%%.0f\",s/n}' \"$TEMP_LOG\" 2>/dev/null)\n"
+        "[ -z \"$TEMP_MAX\" ] && TEMP_MAX=$(get_temp)\n"
+        "[ -z \"$TEMP_AVG\" ] && TEMP_AVG=$TEMP_MAX\n"
+        "SCORE=$(grep 'glmark2 Score:' \"$GL_LOG\" | awk '{print $NF}')\n"
+        "GPU_MHZ=$(cat /sys/class/devfreq/ff400000.gpu/cur_freq 2>/dev/null | awk '{printf \"%%d\",$1/1000000}')\n"
+        "[ -z \"$GPU_MHZ\" ] && GPU_MHZ=0\n"
+        "if [ -n \"$SCORE\" ]; then\n"
+        "  echo \"OK $SCORE $GPU_MHZ $TEMP_START $TEMP_AVG $TEMP_MAX\" > \"$RESULT\"\n"
+        "  echo \"$(date '+%%Y-%%m-%%d %%H:%%M') | GPU | $SCORE pts @ ${GPU_MHZ}MHz | ${TEMP_START}C -> ${TEMP_AVG}C -> ${TEMP_MAX}C peak\" >> %s\n"
+        "else\n"
+        "  ERR=$(grep -i 'error\\|failed\\|warning' \"$GL_LOG\" 2>/dev/null | tail -3 | tr '\\n' ' ')\n"
+        "  echo \"FAIL $ERR\" > \"$RESULT\"\n"
+        "fi\n"
+        "rm -f \"$TEMP_LOG\"\n"
+        "systemctl start emulationstation 2>/dev/null\n",
+        GPU_BENCH_LOG, GPU_BENCH_RESULT, UI_SCORES_FILE);
+    fclose(f);
+    chmod("/tmp/r36_gpu_bench_runner.sh", 0755);
+}
+
+static void screen_gpu_benchmark(void) {
+    int installed = (access("/usr/bin/glmark2-es2-drm", X_OK) == 0) ||
+                    (access("/usr/local/bin/glmark2-es2-drm", X_OK) == 0);
+
+    if (!installed) {
+        const char *infos[] = {"Manual: apt install glmark2-es2-drm"};
+        if (!confirm_screen(S(STR_BENCHMARK_GPU_TITLE),
+                            S(STR_BENCHMARK_GPU_NOT_INSTALLED),
+                            NULL, NULL, NULL,
+                            NULL, 0, NULL, 0, infos, 1,
+                            S(STR_BENCHMARK_GPU_INSTALL), S(STR_CANCEL))) {
+            return;
+        }
+        if (!install_glmark2()) {
+            show_info(S(STR_BENCHMARK_GPU_TITLE), "Install failed");
+            SDL_Delay(3000);
+            return;
+        }
+    }
+
+    const char *infos[] = {S(STR_BENCHMARK_GPU_BLACK_SCREEN)};
+    if (!confirm_screen(S(STR_BENCHMARK_GPU_TITLE),
+                        S(STR_BENCHMARK_GPU_RUNNING),
+                        NULL, NULL, NULL,
+                        NULL, 0, NULL, 0, infos, 1,
+                        S(STR_APPLY), S(STR_CANCEL))) {
+        return;
+    }
+
+    create_gpu_runner();
+
+    system("echo ark | sudo -S bash -c 'cat > /etc/systemd/system/r36-gpu-bench.service << EOF\n"
+           "[Unit]\n"
+           "Description=R36 GPU Benchmark\n"
+           "[Service]\n"
+           "Type=simple\n"
+           "User=root\n"
+           "ExecStart=/tmp/r36_gpu_bench_runner.sh\n"
+           "ExecStopPost=rm -f /etc/systemd/system/r36-gpu-bench.service\n"
+           "EOF\n"
+           "systemctl daemon-reload && systemctl start r36-gpu-bench'");
+
+    /* Exit so the runner can take over DRM/KMS. */
+    running = 0;
+}
+
+static void check_gpu_bench_pending(void) {
+    FILE *f = fopen(GPU_BENCH_RESULT, "r");
+    if (!f) return;
+    char line[512];
+    if (!fgets(line, sizeof(line), f)) { fclose(f); return; }
+    fclose(f);
+    remove(GPU_BENCH_RESULT);
+
+    draw_bg();
+    draw_header(S(STR_BENCHMARK_GPU_RESULT), NULL);
+
+    char score[32], gpu_mhz[16], t_start[16], t_avg[16], t_max[16];
+    if (sscanf(line, "OK %s %s %s %s %s", score, gpu_mhz, t_start, t_avg, t_max) == 5) {
+        char msg2[64], msg3[64];
+        snprintf(msg2, sizeof(msg2), "GPU: %s MHz", gpu_mhz);
+        snprintf(msg3, sizeof(msg3), "%sC -> %sC -> %sC peak", t_start, t_avg, t_max);
+
+        int sw = txtw(fnt_big, score);
+        txt(fnt_big, score, W/2 - sw/2, 120, 100, 160, 255);
+        int uw = txtw(fnt_med, S(STR_BENCHMARK_GPU_PTS));
+        txt(fnt_med, S(STR_BENCHMARK_GPU_PTS), W/2 - uw/2, 180, 150, 160, 190);
+        txt(fnt_med, msg2, 40, 240, 200, 210, 240);
+        txt(fnt_sm, msg3, 40, 280, 150, 160, 190);
+    } else {
+        txt(fnt_med, S(STR_BENCHMARK_GPU_FAILED), 40, 120, 255, 140, 140);
+        char *err = line;
+        if (strncmp(err, "FAIL ", 5) == 0) err += 5;
+        txt(fnt_sm, err, 40, 170, 200, 210, 240);
+    }
+
+    draw_footer("[A/B] Continue");
+    SDL_RenderPresent(ren);
+
+    while (running) {
+        Keys k = poll_keys();
+        if (k.a || k.b || k.sel) break;
+        SDL_Delay(16);
     }
 }
 
@@ -2822,6 +2994,7 @@ int main(void){
     for(int i=0;i<SDL_NumJoysticks();i++)
         if(SDL_IsGameController(i)){gc=SDL_GameControllerOpen(i);break;}
     refresh_state();
+    check_gpu_bench_pending();
     screen_main();
     app_destroy();
     return 0;
