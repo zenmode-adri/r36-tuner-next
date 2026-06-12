@@ -1786,7 +1786,7 @@ static void screen_dtb_restore(const char *dtb) {
 #define CPU_BENCH_SRC "/tmp/r36_cpubench_sdl.c"
 #define CPU_BENCH_BIN "/tmp/r36_cpubench_sdl"
 #define CPU_BASELINE_FILE "/etc/r36_tuner_cpu_baseline"
-#define UI_SCORES_FILE    "/etc/r36_tuner_ui_scores.log"
+#define UI_SCORES_FILE    "/home/ark/.r36_tuner_ui_scores.log"
 
 static int compile_cpu_bench(void) {
     if (access(CPU_BENCH_BIN, X_OK) == 0) return 1;
