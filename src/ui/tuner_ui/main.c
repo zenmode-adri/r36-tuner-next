@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <dirent.h>
+#include <time.h>
 
 /* ── Paths ──────────────────────────────────────────────────────────────── */
 #define FONT_BOLD  "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -173,6 +174,9 @@ typedef enum {
     STR_BENCHMARK_RAM_RESULT,
     STR_BENCHMARK_RAM_MBPS,
     STR_BENCHMARK_RAM_GCC_MISSING,
+    STR_BENCHMARK_HISTORY_TITLE,
+    STR_BENCHMARK_HISTORY_EMPTY,
+    STR_BENCHMARK_HISTORY_CLEAR,
     STR_BENCHMARK_NOT_IMPLEMENTED,
     STR_COUNT
 } StringID;
@@ -327,6 +331,9 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_BENCHMARK_RAM_RESULT] = { "Result", "Resultado" },
     [STR_BENCHMARK_RAM_MBPS] = { "MB/s", "MB/s" },
     [STR_BENCHMARK_RAM_GCC_MISSING] = { "gcc not found. Install: apt install gcc", "gcc no encontrado. Instala: apt install gcc" },
+    [STR_BENCHMARK_HISTORY_TITLE] = { "Score History", "Historial de puntuaciones" },
+    [STR_BENCHMARK_HISTORY_EMPTY] = { "No scores recorded yet.", "Aun no hay puntuaciones." },
+    [STR_BENCHMARK_HISTORY_CLEAR] = { "Clear History", "Borrar historial" },
     [STR_BENCHMARK_NOT_IMPLEMENTED] = { "Not implemented yet", "No implementado aun" },
 };
 
@@ -1779,6 +1786,7 @@ static void screen_dtb_restore(const char *dtb) {
 #define CPU_BENCH_SRC "/tmp/r36_cpubench_sdl.c"
 #define CPU_BENCH_BIN "/tmp/r36_cpubench_sdl"
 #define CPU_BASELINE_FILE "/etc/r36_tuner_cpu_baseline"
+#define UI_SCORES_FILE    "/etc/r36_tuner_ui_scores.log"
 
 static int compile_cpu_bench(void) {
     if (access(CPU_BENCH_BIN, X_OK) == 0) return 1;
@@ -1882,6 +1890,19 @@ static int screen_cpu_benchmark_result(BenchState *st) {
     int t_avg = st->temp_count > 0 ? st->temp_sum / st->temp_count : 0;
     char score_str[32];
     fmt_score(st->score, score_str, sizeof(score_str));
+
+    /* Log result to history */
+    FILE *hf = fopen(UI_SCORES_FILE, "a");
+    if (hf) {
+        time_t nowt = time(NULL);
+        struct tm *tm = localtime(&nowt);
+        char date[32];
+        strftime(date, sizeof(date), "%Y-%m-%d %H:%M", tm);
+        fprintf(hf, "%s | CPU | %s %s | %dC -> %dC -> %dC peak\n",
+                date, score_str, S(STR_BENCHMARK_CPU_MOPS),
+                st->temp_min, t_avg, st->temp_max);
+        fclose(hf);
+    }
 
     while (running) {
         Keys k = poll_keys();
@@ -2348,6 +2369,20 @@ static int screen_ram_benchmark_result(RamBenchState *st) {
     fmt_score(st->write_mbps, write_str, sizeof(write_str));
     fmt_score(st->copy_mbps, copy_str, sizeof(copy_str));
 
+    /* Log result to history */
+    FILE *hf = fopen(UI_SCORES_FILE, "a");
+    if (hf) {
+        time_t nowt = time(NULL);
+        struct tm *tm = localtime(&nowt);
+        char date[32];
+        strftime(date, sizeof(date), "%Y-%m-%d %H:%M", tm);
+        fprintf(hf, "%s | RAM | Write %s %s | Copy %s %s | %dC -> %dC -> %dC peak\n",
+                date, write_str, S(STR_BENCHMARK_RAM_MBPS),
+                copy_str, S(STR_BENCHMARK_RAM_MBPS),
+                st->temp_min, t_avg, st->temp_max);
+        fclose(hf);
+    }
+
     while (running) {
         Keys k = poll_keys();
         if (k.left || k.right) sel ^= 1;
@@ -2506,6 +2541,37 @@ static void screen_ram_benchmark(void) {
     }
 }
 
+/* ── Benchmark history ───────────────────────────────────────────────────── */
+static void screen_benchmark_history(void) {
+    FILE *f = fopen(UI_SCORES_FILE, "r");
+    if (!f) {
+        show_info(S(STR_BENCHMARK_HISTORY_TITLE), S(STR_BENCHMARK_HISTORY_EMPTY));
+        SDL_Delay(2000);
+        return;
+    }
+
+    char lines[64][TEXT_LINE_LEN];
+    int nl = 0;
+    char line[TEXT_LINE_LEN];
+    while (fgets(line, sizeof(line), f) && nl < 64) {
+        size_t len = strlen(line);
+        while (len > 0 && (line[len-1] == '\n' || line[len-1] == '\r')) line[--len] = 0;
+        if (len == 0) continue;
+        strncpy(lines[nl], line, TEXT_LINE_LEN - 1);
+        lines[nl][TEXT_LINE_LEN - 1] = 0;
+        nl++;
+    }
+    fclose(f);
+
+    if (nl == 0) {
+        show_info(S(STR_BENCHMARK_HISTORY_TITLE), S(STR_BENCHMARK_HISTORY_EMPTY));
+        SDL_Delay(2000);
+        return;
+    }
+
+    screen_text(S(STR_BENCHMARK_HISTORY_TITLE), lines, nl);
+}
+
 /* ── Benchmark submenu ───────────────────────────────────────────────────── */
 static void screen_benchmark(void) {
     LItem items[4];
@@ -2531,6 +2597,7 @@ static void screen_benchmark(void) {
         switch (r) {
             case 0: screen_cpu_benchmark(); break;
             case 1: screen_ram_benchmark(); break;
+            case 3: screen_benchmark_history(); break;
             default:
                 show_info(S(STR_BENCHMARK), S(STR_BENCHMARK_NOT_IMPLEMENTED));
                 SDL_Delay(1500);
