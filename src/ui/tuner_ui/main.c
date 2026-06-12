@@ -2542,34 +2542,129 @@ static void screen_ram_benchmark(void) {
 }
 
 /* ── Benchmark history ───────────────────────────────────────────────────── */
-static void screen_benchmark_history(void) {
-    FILE *f = fopen(UI_SCORES_FILE, "r");
-    if (!f) {
-        show_info(S(STR_BENCHMARK_HISTORY_TITLE), S(STR_BENCHMARK_HISTORY_EMPTY));
-        SDL_Delay(2000);
-        return;
-    }
+typedef struct {
+    char date[32];
+    char type[8];
+    char detail[96];
+    char temp[64];
+} HistoryEntry;
 
-    char lines[64][TEXT_LINE_LEN];
-    int nl = 0;
-    char line[TEXT_LINE_LEN];
-    while (fgets(line, sizeof(line), f) && nl < 64) {
+static void history_trim(char *s) {
+    size_t n = strlen(s);
+    while (n > 0 && (s[n-1] == ' ' || s[n-1] == '\t')) s[--n] = 0;
+    char *p = s;
+    while (*p == ' ' || *p == '\t') p++;
+    if (p != s) memmove(s, p, strlen(p) + 1);
+}
+
+static int history_load(HistoryEntry entries[], int max) {
+    FILE *f = fopen(UI_SCORES_FILE, "r");
+    if (!f) return 0;
+    int n = 0;
+    char line[256];
+    while (fgets(line, sizeof(line), f) && n < max) {
         size_t len = strlen(line);
         while (len > 0 && (line[len-1] == '\n' || line[len-1] == '\r')) line[--len] = 0;
         if (len == 0) continue;
-        strncpy(lines[nl], line, TEXT_LINE_LEN - 1);
-        lines[nl][TEXT_LINE_LEN - 1] = 0;
-        nl++;
+
+        /* Expected format: "date | type | detail | temp" */
+        char *p1 = strchr(line, '|');
+        if (!p1) continue;
+        *p1 = 0;
+        strncpy(entries[n].date, line, sizeof(entries[n].date) - 1);
+        entries[n].date[sizeof(entries[n].date) - 1] = 0;
+
+        char *p2 = strchr(p1 + 1, '|');
+        if (!p2) continue;
+        *p2 = 0;
+        strncpy(entries[n].type, p1 + 1, sizeof(entries[n].type) - 1);
+        entries[n].type[sizeof(entries[n].type) - 1] = 0;
+
+        char *p3 = strrchr(p2 + 1, '|');
+        if (!p3) continue;
+        *p3 = 0;
+        strncpy(entries[n].detail, p2 + 1, sizeof(entries[n].detail) - 1);
+        entries[n].detail[sizeof(entries[n].detail) - 1] = 0;
+
+        strncpy(entries[n].temp, p3 + 1, sizeof(entries[n].temp) - 1);
+        entries[n].temp[sizeof(entries[n].temp) - 1] = 0;
+
+        history_trim(entries[n].date);
+        history_trim(entries[n].type);
+        history_trim(entries[n].detail);
+        history_trim(entries[n].temp);
+        n++;
     }
     fclose(f);
+    return n;
+}
 
-    if (nl == 0) {
+static void screen_benchmark_history(void) {
+    HistoryEntry entries[64];
+    int n = history_load(entries, 64);
+    if (n == 0) {
         show_info(S(STR_BENCHMARK_HISTORY_TITLE), S(STR_BENCHMARK_HISTORY_EMPTY));
         SDL_Delay(2000);
         return;
     }
 
-    screen_text(S(STR_BENCHMARK_HISTORY_TITLE), lines, nl);
+    int scroll = 0;
+    const int PAD = 16;
+    const int TOP = 58;
+    const int BOTTOM = H - 30;
+    const int ROW_H = 74;
+    const int GAP = 8;
+    int visible = (BOTTOM - TOP + GAP) / (ROW_H + GAP);
+    if (visible < 1) visible = 1;
+
+    while (running) {
+        Keys k = poll_keys();
+        if (k.b || k.sel) return;
+        if (k.up && scroll > 0) scroll--;
+        if (k.down && scroll < n - visible) scroll++;
+
+        draw_bg();
+        draw_header(S(STR_BENCHMARK_HISTORY_TITLE), NULL);
+
+        for (int i = scroll; i < n && i < scroll + visible; i++) {
+            int y = TOP + (i - scroll) * (ROW_H + GAP);
+            int is_cpu = (strcmp(entries[i].type, "CPU") == 0);
+
+            rounded(PAD, y, W - 2*PAD, ROW_H, 10, 18, 20, 38);
+
+            /* Type badge */
+            const char *type_lbl = is_cpu ? S(STR_BENCHMARK_CPU) : S(STR_BENCHMARK_RAM);
+            int badge_w = txtw(fnt_sm, type_lbl) + 18;
+            rounded(PAD + 10, y + 8, badge_w, 18, 4,
+                    is_cpu ? 40 : 120, is_cpu ? 90 : 70, is_cpu ? 220 : 160);
+            txt(fnt_sm, type_lbl, PAD + 19, y + 9, 255, 255, 255);
+
+            /* Date */
+            txt(fnt_sm, entries[i].date, PAD + 14 + badge_w + 8, y + 9, 120, 130, 160);
+
+            /* Detail */
+            txt(fnt_med, entries[i].detail, PAD + 18, y + 31, 210, 220, 240);
+
+            /* Temperature */
+            txt(fnt_sm, entries[i].temp, PAD + 18, y + 51, 150, 160, 190);
+        }
+
+        /* Scroll indicator */
+        if (n > visible) {
+            int track_h = BOTTOM - TOP;
+            int bar_h = (visible * track_h) / n;
+            if (bar_h < 16) bar_h = 16;
+            int bar_y = TOP + (scroll * (track_h - bar_h)) / (n - visible);
+            setcol(30, 34, 60);
+            fillrect(W - 10, TOP, 4, track_h);
+            setcol(90, 130, 255);
+            fillrect(W - 10, bar_y, 4, bar_h);
+        }
+
+        draw_footer("[DPAD] Navigate  [B] Back");
+        SDL_RenderPresent(ren);
+        SDL_Delay(16);
+    }
 }
 
 /* ── Benchmark submenu ───────────────────────────────────────────────────── */
