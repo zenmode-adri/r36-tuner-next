@@ -1,4 +1,4 @@
-# AGENTS.md — R36 Tuner Workspace
+# AGENTS.md — R36 Tuner Next Workspace
 
 > Agent-focused reference. `r36-tuner/CHANGELOG.md` is the live project history. `r36-tuner/README.md` documents the legacy Bash-only script; the current effort is the SDL2/TTF UI in `src/ui/tuner_ui/`.
 
