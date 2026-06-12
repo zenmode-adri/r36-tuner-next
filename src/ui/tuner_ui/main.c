@@ -1934,7 +1934,7 @@ static void screen_main(void){
                 case 2: screen_gpu_freq(); break;
                 case 3: screen_dtb_main(); break;
                 case 4:
-                    run_on_tty("printf '\\033c' > /dev/tty1; \"/opt/system/R36 Tuner Next.sh\"");
+                    run_on_tty("printf '\\033c' > /dev/tty1; \"/opt/system/R36 Tuner.sh\"");
                     break;
                 case 5: screen_monitor(); break;
                 case 6: screen_language(); break;

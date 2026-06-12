@@ -10,8 +10,8 @@ from r36_ssh import get_client_with_retry
 p = lambda *a: print(*a, flush=True)
 
 # ── Extraer debs del script ────────────────────────────────────────────────────
-p('Leyendo R36 Tuner Next.sh...')
-script = open(os.path.join(ROOT, 'r36-tuner', 'R36 Tuner Next.sh'), 'r', encoding='utf-8', errors='replace').read().splitlines()
+p('Leyendo R36 Tuner.sh...')
+script = open(os.path.join(ROOT, 'r36-tuner', 'R36 Tuner.sh'), 'r', encoding='utf-8', errors='replace').read().splitlines()
 p(f'  {len(script)} lineas leidas')
 
 def extract_section(lines, start_marker, end_marker):

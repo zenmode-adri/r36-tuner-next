@@ -49,22 +49,22 @@ except Exception as e:
 # ─────────────────────────────────────────────────────────────
 section("1. SCRIPT DEPLOYMENT")
 
-out, _ = run(c, 'ls -la "/opt/system/R36 Tuner Next.sh"')
+out, _ = run(c, 'ls -la "/opt/system/R36 Tuner.sh"')
 info(out)
-out, _ = run(c, 'head -3 "/opt/system/R36 Tuner Next.sh"')
+out, _ = run(c, 'head -3 "/opt/system/R36 Tuner.sh"')
 info(out)
 
-ver, _ = run(c, 'grep "^VERSION=" "/opt/system/R36 Tuner Next.sh" | head -1')
+ver, _ = run(c, 'grep "^VERSION=" "/opt/system/R36 Tuner.sh" | head -1')
 if "3.8" in ver:
     ok(f"Version: {ver}")
 else:
     issue(f"Wrong version on device: {ver}")
 
-sz, _ = run(c, 'wc -l "/opt/system/R36 Tuner Next.sh"')
+sz, _ = run(c, 'wc -l "/opt/system/R36 Tuner.sh"')
 info(f"Lines: {sz}")
 
 # Check for CRLF (Windows line endings)
-crlf, _ = run(c, 'file "/opt/system/R36 Tuner Next.sh" | grep -c CRLF || echo 0')
+crlf, _ = run(c, 'file "/opt/system/R36 Tuner.sh" | grep -c CRLF || echo 0')
 if crlf.strip() == "0":
     ok("Line endings: LF (correct)")
 else:
@@ -440,7 +440,7 @@ if "PRESENT" in oc_pending:
 section("14. SCRIPT SELF-CHECK (grep known bugs)")
 
 # Check if the script on device has the glmark2 legacy binary embedded
-legacy_marker, _ = run(c, "grep -c '__GLMARK2_LEGACY_START__' '/opt/system/R36 Tuner Next.sh' 2>/dev/null")
+legacy_marker, _ = run(c, "grep -c '__GLMARK2_LEGACY_START__' '/opt/system/R36 Tuner.sh' 2>/dev/null")
 if legacy_marker.strip() in ("0", ""):
     issue("glmark2 legacy marker NOT in deployed script — InstallGlmark2Legacy() will fail")
 else:

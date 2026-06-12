@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-# Fix dialog heights in R36 Tuner Next.sh
+# Fix dialog heights in R36 Tuner.sh
 # All replacements use exact string matching on the full line content.
 # Encoding: UTF-8 (critical — previous crash was from default system codec)
 
 import os
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-path = os.path.join(ROOT, 'r36-tuner', 'R36 Tuner Next.sh')
+path = os.path.join(ROOT, 'r36-tuner', 'R36 Tuner.sh')
 
 with open(path, encoding='utf-8') as f:
     content = f.read()
