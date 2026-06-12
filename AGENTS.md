@@ -130,7 +130,7 @@ ssh ark@<ip> "chmod +x '/opt/system/R36 Tuner.sh'"
 
 ## 11. SDL2 UI
 
-Experimental SDL2/TTF frontend in `src/ui/tuner_ui/main.c` (Spanish UI strings). Launcher: `src/ui/tuner_ui/launch_tuner.sh` (stops EmulationStation, runs UI, restarts ES). `tools/deployment/deploy_ui.py` uploads the binary plus launcher to `/opt/system/`.
+Experimental SDL2/TTF frontend in `src/ui/tuner_ui/main.c` (Spanish UI strings). Launcher: `src/ui/tuner_ui/R36 Tuner Next.sh` (stops EmulationStation, runs UI, restarts ES). `tools/deployment/deploy_ui.py` uploads the binary plus launcher to `/opt/system/`.
 
 Required env:
 ```bash

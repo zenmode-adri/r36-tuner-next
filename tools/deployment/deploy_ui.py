@@ -13,10 +13,10 @@ from r36_ssh import connect
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SRC_C = os.path.join(ROOT, "src", "ui", "tuner_ui", "main.c")
-LAUNCHER_SRC = os.path.join(ROOT, "src", "ui", "tuner_ui", "launch_tuner.sh")
+LAUNCHER_SRC = os.path.join(ROOT, "src", "ui", "tuner_ui", "R36 Tuner Next.sh")
 LOCAL_BIN = os.path.join(ROOT, "bin", "tuner_ui")
 REMOTE_BIN = "/opt/system/tuner_ui"
-REMOTE_LAUNCHER = "/opt/system/R36 Tuner UI.sh"
+REMOTE_LAUNCHER = "/opt/system/R36 Tuner Next.sh"
 REMOTE_TMP = "/tmp/tuner_ui_deploy"
 
 

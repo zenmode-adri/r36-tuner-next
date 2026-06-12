@@ -2,7 +2,7 @@
 c = paramiko.SSHClient()
 c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 c.connect('192.168.1.87', port=22, username='ark', password='ark', timeout=10)
-_,out,_ = c.exec_command('ls -la /opt/system/launch_tuner.sh')
+_,out,_ = c.exec_command('ls -la \"/opt/system/R36 Tuner Next.sh\"')
 print('LAUNCHER PERMS:', out.read().decode().strip())
 _,out,_ = c.exec_command('ls /roms/tuner/')
 print('ROM DIR:', out.read().decode().strip())

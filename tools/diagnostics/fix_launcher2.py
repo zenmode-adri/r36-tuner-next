@@ -10,9 +10,9 @@ with sftp.open('/tmp/launch_tuner_new.sh', 'wb') as f:
     f.write(content)
 sftp.close()
 
-_,out,err = c.exec_command('echo ark | sudo -S cp /tmp/launch_tuner_new.sh /opt/system/launch_tuner.sh && sudo chmod +x /opt/system/launch_tuner.sh && echo DONE')
+_,out,err = c.exec_command('echo ark | sudo -S cp /tmp/launch_tuner_new.sh /opt/system/R36 Tuner Next.sh && sudo chmod +x /opt/system/R36 Tuner Next.sh && echo DONE')
 print(out.read().decode().strip())
 
-_,out,_ = c.exec_command('cat /opt/system/launch_tuner.sh')
+_,out,_ = c.exec_command('cat /opt/system/R36 Tuner Next.sh')
 print(out.read().decode())
 c.close()

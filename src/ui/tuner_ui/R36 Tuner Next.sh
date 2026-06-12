@@ -1,5 +1,5 @@
 #!/bin/bash
-# launch_tuner.sh -- SDL2 Tuner UI launcher for dArkOSRE.
+# R36 Tuner Next.sh -- SDL2 Tuner UI launcher for dArkOSRE.
 # Stops EmulationStation, runs the SDL2 UI, then restarts ES on exit.
 
 # SDL2 environment required on this device.

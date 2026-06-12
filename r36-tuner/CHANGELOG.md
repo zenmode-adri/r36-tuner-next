@@ -10,7 +10,7 @@
 - Refactored key host-side research scripts to use `r36_ssh.py`: `tools/benchmarks/setup_glmark2.py`, `tools/benchmarks/terrain_test_quick.py`, `tools/undervolt/auto_sweep.py`, `tools/undervolt/voltage_sweep.py`, `tools/gpu/gpu_oc_setup.py`. Remaining benchmark/undervolt/gpu scripts still use raw paramiko and can be migrated gradually.
 - Deep-cleaned temporary files: `assets/fb0.raw`, `assets/screenshot.*`, loose ISO in workspace root, `rk3326-r36s-linux.dtb.teacup_backup`, `overclock-r36s/`, `firmware/os-images/`, and old `src/ui/tuner_ui/tuner_ui` binary.
 - Added automatic remote-services setup on the device: `r36-remote-services.service` starts SSH/SMB/Filebrowser at boot when network is available, plus a NetworkManager dispatcher that starts them if WiFi is connected later.
-- Deployed experimental SDL2 UI (`src/ui/tuner_ui/main.c`) to `/opt/system/tuner_ui` with launchers `R36 Tuner UI.sh` and `launch_tuner.sh`.
+- Deployed experimental SDL2 UI (`src/ui/tuner_ui/main.c`) to `/opt/system/tuner_ui` with launcher `R36 Tuner Next.sh`.
 - Merged session findings into `r36-tuner/docs/session-2026-06-11.md` and condensed `AGENTS.md`.
 - Added `r36-tuner/docs/kernel-build.md` with permanent build notes for the patched teacupx kernel.
 - Added `tools/README.md` as a quick index of host-side scripts.
