@@ -27,6 +27,7 @@
 - Fix: Main menu item-height calculation adjusted so the new Language item is not cut off.
 - Fix: `tools/deployment/deploy_ui.py` now stops any running `tuner_ui` process before overwriting `/opt/system/tuner_ui`.
 - Fix: `tools/deployment/r36_ssh.py` tolerates `chmod: Operation not permitted` when the destination binary is busy/running, as long as the uploaded file already has the requested mode.
+- Feat: Native CPU benchmark added to the SDL2 UI (`screen_cpu_benchmark()`). Compiles and runs the same 30-second integer ALU benchmark as `R36 Tuner.sh` without falling back to the Bash script. Runs asynchronously via `SDL_Thread`, samples temperature during the run, restores the previous governor, and compares against a saved baseline. A new Benchmark submenu is reachable from the main menu; RAM, GPU and history entries are placeholders for now.
 
 **Bug fixes:**
 
