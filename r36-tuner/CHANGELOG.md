@@ -32,7 +32,7 @@
 - UI: Redesigned CPU benchmark result screen with a central panel, large score, temperature initial/avg/peak row, color-coded baseline comparison, and Run Again / Back buttons.
 - UI: Added `fmt_score()` helper to render large numbers with K/M/G suffixes and ~3 significant digits (e.g. `1247` → `1.25K`). Applied to CPU and RAM benchmark results.
 - Feat: Benchmark history view (`screen_benchmark_history()`). CPU and RAM results are appended to `/home/ark/.r36_tuner_ui_scores.log` and shown as styled cards with type badge, date, detail and temperature.
-- Feat: A new Benchmark submenu is reachable from the main menu; GPU entry is a placeholder for now.
+- Feat: Native GPU benchmark added to the SDL2 UI (`screen_gpu_benchmark()`). Detects `glmark2-es2-drm`, offers to install it via apt, and runs the off-screen build/texture/shading/terrain test. The UI exits during the benchmark so glmark2 can take DRM/KMS; a temporary systemd service handles stopping/starting EmulationStation and the score is shown on the next launch.
 
 **Bug fixes:**
 
