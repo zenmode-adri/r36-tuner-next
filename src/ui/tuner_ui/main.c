@@ -150,6 +150,22 @@ typedef enum {
     STR_DPAD_VOLTAGE,
     STR_A_APPLY_B_BACK,
     STR_DTB_PATCHED,
+    STR_BENCHMARK_CPU,
+    STR_BENCHMARK_RAM,
+    STR_BENCHMARK_GPU,
+    STR_BENCHMARK_HISTORY,
+    STR_BENCHMARK_CPU_TITLE,
+    STR_BENCHMARK_CPU_RUNNING,
+    STR_BENCHMARK_CPU_PLEASE_WAIT,
+    STR_BENCHMARK_CPU_RESULT,
+    STR_BENCHMARK_CPU_SCORE,
+    STR_BENCHMARK_CPU_MOPS,
+    STR_BENCHMARK_CPU_TEMP,
+    STR_BENCHMARK_CPU_GCC_MISSING,
+    STR_BENCHMARK_CPU_SET_BASELINE,
+    STR_BENCHMARK_CPU_VS_BASELINE,
+    STR_BENCHMARK_CPU_BACK,
+    STR_BENCHMARK_NOT_IMPLEMENTED,
     STR_COUNT
 } StringID;
 
@@ -1704,6 +1720,195 @@ static void screen_dtb_restore(const char *dtb) {
     }
 }
 
+/* ── Benchmark helpers ───────────────────────────────────────────────────── */
+#define CPU_BENCH_SRC "/tmp/r36_cpubench_sdl.c"
+#define CPU_BENCH_BIN "/tmp/r36_cpubench_sdl"
+#define CPU_BASELINE_FILE "/etc/r36_tuner_cpu_baseline"
+
+static int compile_cpu_bench(void) {
+    if (access(CPU_BENCH_BIN, X_OK) == 0) return 1;
+    FILE *f = fopen(CPU_BENCH_SRC, "w");
+    if (!f) return 0;
+    fprintf(f,
+        "#include <stdio.h>\n"
+        "#include <time.h>\n"
+        "#include <stdint.h>\n"
+        "int main() {\n"
+        "    struct timespec t0, t1;\n"
+        "    clock_gettime(CLOCK_MONOTONIC, &t0);\n"
+        "    uint32_t a=1, b=2, c=3, d=4;\n"
+        "    long long iters = 0;\n"
+        "    int i;\n"
+        "    do {\n"
+        "        for (i = 0; i < 10000000; i++) {\n"
+        "            a = a * 1664525u + 1013904223u;\n"
+        "            b = b * 1664525u + 1013904223u;\n"
+        "            c = c * 1664525u + 1013904223u;\n"
+        "            d = d * 1664525u + 1013904223u;\n"
+        "        }\n"
+        "        iters += 40000000;\n"
+        "        clock_gettime(CLOCK_MONOTONIC, &t1);\n"
+        "    } while ((t1.tv_sec - t0.tv_sec) < 30);\n"
+        "    if ((a ^ b ^ c ^ d) == 0) iters++;\n"
+        "    printf(\"%%lld\\n\", iters);\n"
+        "    return 0;\n"
+        "}\n");
+    fclose(f);
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "gcc -O1 -o %s %s 2>/dev/null", CPU_BENCH_BIN, CPU_BENCH_SRC);
+    int rc = system(cmd);
+    return (rc == 0 && access(CPU_BENCH_BIN, X_OK) == 0);
+}
+
+typedef struct {
+    long long score;
+    int done;
+    int gcc_ok;
+    int temp_min;
+    int temp_max;
+    int temp_sum;
+    int temp_count;
+    char prev_gov[32];
+} BenchState;
+
+static int cpu_bench_thread(void *data) {
+    BenchState *st = (BenchState *)data;
+    if (!compile_cpu_bench()) {
+        st->gcc_ok = 0;
+        st->done = 1;
+        return 0;
+    }
+    st->gcc_ok = 1;
+
+    write_file(CPU_POLICY "/scaling_governor", "performance");
+
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "%s 2>/dev/null", CPU_BENCH_BIN);
+    FILE *f = popen(cmd, "r");
+    if (!f) {
+        st->done = 1;
+        return 0;
+    }
+
+    char line[128];
+    long long raw = 0;
+    if (fgets(line, sizeof(line), f)) raw = atoll(line);
+    pclose(f);
+    st->score = raw / 1000000;
+    st->done = 1;
+    return 0;
+}
+
+static void screen_cpu_benchmark_result(BenchState *st) {
+    char lines[8][TEXT_LINE_LEN];
+    int nl = 0;
+
+    snprintf(lines[nl++], TEXT_LINE_LEN, "%s: %lld %s",
+             S(STR_BENCHMARK_CPU_SCORE), st->score, S(STR_BENCHMARK_CPU_MOPS));
+
+    int t_avg = st->temp_count > 0 ? st->temp_sum / st->temp_count : 0;
+    snprintf(lines[nl++], TEXT_LINE_LEN, "%s: %dC -> %dC -> %dC peak",
+             S(STR_BENCHMARK_CPU_TEMP), st->temp_min, t_avg, st->temp_max);
+
+    int baseline = 0;
+    FILE *bf = fopen(CPU_BASELINE_FILE, "r");
+    if (bf) { fscanf(bf, "%d", &baseline); fclose(bf); }
+
+    snprintf(lines[nl++], TEXT_LINE_LEN, "%s", "");
+    if (baseline > 0) {
+        int pct = (int)((st->score * 100LL) / baseline);
+        int diff = pct - 100;
+        snprintf(lines[nl++], TEXT_LINE_LEN, "%s %d%%  (%s%d%%)",
+                 S(STR_BENCHMARK_CPU_VS_BASELINE), pct,
+                 diff >= 0 ? "+" : "", diff);
+    } else {
+        bf = fopen(CPU_BASELINE_FILE, "w");
+        if (bf) { fprintf(bf, "%lld\n", st->score); fclose(bf); }
+        snprintf(lines[nl++], TEXT_LINE_LEN, "%s", S(STR_BENCHMARK_CPU_SET_BASELINE));
+    }
+
+    screen_text(S(STR_BENCHMARK_CPU_RESULT), lines, nl);
+}
+
+static void screen_cpu_benchmark(void) {
+    BenchState st = {0};
+    st.temp_min = 999;
+    st.gcc_ok = 1;
+    snprintf(st.prev_gov, sizeof(st.prev_gov), "%s", read_file(CPU_POLICY "/scaling_governor"));
+
+    SDL_Thread *thread = SDL_CreateThread(cpu_bench_thread, "cpubench", &st);
+    if (!thread) {
+        show_info(S(STR_BENCHMARK_CPU_TITLE), "Thread error");
+        SDL_Delay(2000);
+        return;
+    }
+
+    Uint32 start = SDL_GetTicks();
+    Uint32 last_sample = 0;
+    int cancelled = 0;
+
+    while (running && !st.done) {
+        Keys k = poll_keys();
+        if (k.b) { cancelled = 1; break; }
+
+        Uint32 now = SDL_GetTicks();
+        if (now - last_sample >= 2000) {
+            int t = read_int(CPU_TEMP);
+            if (t > 0) {
+                t /= 1000;
+                if (st.temp_count == 0 || t < st.temp_min) st.temp_min = t;
+                if (t > st.temp_max) st.temp_max = t;
+                st.temp_sum += t;
+                st.temp_count++;
+            }
+            last_sample = now;
+        }
+
+        draw_bg();
+        draw_header(S(STR_BENCHMARK_CPU_TITLE), NULL);
+
+        int elapsed = (now - start) / 1000;
+        if (elapsed > 30) elapsed = 30;
+        txt(fnt_med, S(STR_BENCHMARK_CPU_RUNNING), 40, 120, 200, 210, 240);
+
+        char msg[128];
+        snprintf(msg, sizeof(msg), "%s: %ds / 30s", S(STR_BENCHMARK_CPU_PLEASE_WAIT), elapsed);
+        txt(fnt_sm, msg, 40, 160, 150, 160, 190);
+
+        int pw = (W - 80) * elapsed / 30;
+        if (pw > W - 80) pw = W - 80;
+        rounded(40, 200, W - 80, 24, 6, 16, 18, 34);
+        rounded(42, 202, pw, 20, 4, 60, 100, 220);
+
+        if (st.temp_count > 0) {
+            int cur_t = read_int(CPU_TEMP) / 1000;
+            snprintf(msg, sizeof(msg), "%s: %dC (peak %dC)",
+                     S(STR_BENCHMARK_CPU_TEMP), cur_t, st.temp_max);
+            txt(fnt_sm, msg, 40, 250, 150, 160, 190);
+        }
+
+        draw_footer(S(STR_B_BACK));
+        SDL_RenderPresent(ren);
+        SDL_Delay(16);
+    }
+
+    SDL_WaitThread(thread, NULL);
+
+    if (st.prev_gov[0]) {
+        write_file(CPU_POLICY "/scaling_governor", st.prev_gov);
+    }
+
+    if (cancelled) return;
+
+    if (!st.gcc_ok) {
+        show_info(S(STR_BENCHMARK_CPU_TITLE), S(STR_BENCHMARK_CPU_GCC_MISSING));
+        SDL_Delay(3000);
+        return;
+    }
+
+    screen_cpu_benchmark_result(&st);
+}
+
 /* ── DTB: Menu principal ─────────────────────────────────────────────────── */
 static void screen_dtb_main(void) {
     char dtb[256]; strncpy(dtb, dtb_find(), 255);
@@ -1887,6 +2092,38 @@ static void screen_language(void){
     }
 }
 
+/* ── Benchmark submenu ───────────────────────────────────────────────────── */
+static void screen_benchmark(void) {
+    LItem items[4];
+    int n = 0;
+    snprintf(items[n].label, sizeof(items[n].label), "%s", S(STR_BENCHMARK_CPU));
+    snprintf(items[n].desc, sizeof(items[n].desc), "Integer ALU — 30s");
+    items[n++].tag[0] = 0;
+    snprintf(items[n].label, sizeof(items[n].label), "%s", S(STR_BENCHMARK_RAM));
+    snprintf(items[n].desc, sizeof(items[n].desc), "128 MB memset/memcpy");
+    items[n++].tag[0] = 0;
+    snprintf(items[n].label, sizeof(items[n].label), "%s", S(STR_BENCHMARK_GPU));
+    snprintf(items[n].desc, sizeof(items[n].desc), "glmark2 terrain");
+    items[n++].tag[0] = 0;
+    snprintf(items[n].label, sizeof(items[n].label), "%s", S(STR_BENCHMARK_HISTORY));
+    snprintf(items[n].desc, sizeof(items[n].desc), "Saved scores");
+    items[n++].tag[0] = 0;
+
+    int sel = 0;
+    while (running) {
+        int r = submenu("R36 TUNER NEXT", S(STR_BENCHMARK), items, n, &sel,
+                        "[A] Select  [B] Back", 1);
+        if (r < 0) break;
+        switch (r) {
+            case 0: screen_cpu_benchmark(); break;
+            default:
+                show_info(S(STR_BENCHMARK), S(STR_BENCHMARK_NOT_IMPLEMENTED));
+                SDL_Delay(1500);
+                break;
+        }
+    }
+}
+
 /* ── Main menu ──────────────────────────────────────────────────────────── */
 static void screen_main(void){
     int sel=0;
@@ -1933,9 +2170,7 @@ static void screen_main(void){
                 case 1: screen_cpu_freq(); break;
                 case 2: screen_gpu_freq(); break;
                 case 3: screen_dtb_main(); break;
-                case 4:
-                    run_on_tty("printf '\\033c' > /dev/tty1; \"/opt/system/R36 Tuner.sh\"");
-                    break;
+                case 4: screen_benchmark(); break;
                 case 5: screen_monitor(); break;
                 case 6: screen_language(); break;
             }
