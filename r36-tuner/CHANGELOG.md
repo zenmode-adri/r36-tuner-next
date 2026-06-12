@@ -27,7 +27,11 @@
 - Fix: Main menu item-height calculation adjusted so the new Language item is not cut off.
 - Fix: `tools/deployment/deploy_ui.py` now stops any running `tuner_ui` process before overwriting `/opt/system/tuner_ui`.
 - Fix: `tools/deployment/r36_ssh.py` tolerates `chmod: Operation not permitted` when the destination binary is busy/running, as long as the uploaded file already has the requested mode.
-- Feat: Native CPU benchmark added to the SDL2 UI (`screen_cpu_benchmark()`). Compiles and runs the same 30-second integer ALU benchmark as `R36 Tuner.sh` without falling back to the Bash script. Runs asynchronously via `SDL_Thread`, samples temperature during the run, restores the previous governor, and compares against a saved baseline. A new Benchmark submenu is reachable from the main menu; RAM, GPU and history entries are placeholders for now.
+- Feat: Native CPU benchmark added to the SDL2 UI (`screen_cpu_benchmark()`). Compiles and runs the same 30-second integer ALU benchmark as `R36 Tuner.sh` without falling back to the Bash script. Runs asynchronously via `SDL_Thread`, samples temperature during the run, restores the previous governor, and compares against a saved baseline.
+- Feat: Native RAM benchmark added to the SDL2 UI (`screen_ram_benchmark()`). Compiles and runs the same 128 MB memset/memcpy bandwidth test as `R36 Tuner.sh` and shows write/copy MB/s plus temperatures.
+- UI: Redesigned CPU benchmark result screen with a central panel, large score, temperature initial/avg/peak row, color-coded baseline comparison, and Run Again / Back buttons.
+- UI: Added `fmt_score()` helper to render large numbers with K/M/G suffixes and ~3 significant digits (e.g. `1247` → `1.25K`). Applied to CPU and RAM benchmark results.
+- Feat: A new Benchmark submenu is reachable from the main menu; GPU and history entries are placeholders for now.
 
 **Bug fixes:**
 
