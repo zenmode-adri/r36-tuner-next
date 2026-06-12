@@ -2611,11 +2611,10 @@ static void screen_benchmark_history(void) {
     int scroll = 0;
     const int PAD = 16;
     const int TOP = 58;
-    const int BOTTOM = H - 30;
-    const int ROW_H = 74;
+    const int BOTTOM = H - 34;
     const int GAP = 8;
-    int visible = (BOTTOM - TOP + GAP) / (ROW_H + GAP);
-    if (visible < 1) visible = 1;
+    const int visible = 4;
+    const int ROW_H = (BOTTOM - TOP - (visible - 1) * GAP) / visible;
 
     while (running) {
         Keys k = poll_keys();
