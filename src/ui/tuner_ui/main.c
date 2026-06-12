@@ -165,6 +165,7 @@ typedef enum {
     STR_BENCHMARK_CPU_SET_BASELINE,
     STR_BENCHMARK_CPU_VS_BASELINE,
     STR_BENCHMARK_CPU_BACK,
+    STR_BENCHMARK_CPU_RUN_AGAIN,
     STR_BENCHMARK_NOT_IMPLEMENTED,
     STR_COUNT
 } StringID;
@@ -311,6 +312,7 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_BENCHMARK_CPU_SET_BASELINE] = { "Baseline set", "Linea base guardada" },
     [STR_BENCHMARK_CPU_VS_BASELINE] = { "vs baseline", "vs linea base" },
     [STR_BENCHMARK_CPU_BACK] = { "Back", "Atras" },
+    [STR_BENCHMARK_CPU_RUN_AGAIN] = { "Run Again", "Repetir" },
     [STR_BENCHMARK_NOT_IMPLEMENTED] = { "Not implemented yet", "No implementado aun" },
 };
 
@@ -1815,114 +1817,223 @@ static int cpu_bench_thread(void *data) {
     return 0;
 }
 
-static void screen_cpu_benchmark_result(BenchState *st) {
-    char lines[8][TEXT_LINE_LEN];
-    int nl = 0;
+static int screen_cpu_benchmark_result(BenchState *st) {
+    int sel = 0; /* 0 = Run Again, 1 = Back */
+    const int PAD = 24;
+    const int BTN_H = 46;
+    const int BTN_W = (W - 2*PAD - 24) / 2;
 
-    snprintf(lines[nl++], TEXT_LINE_LEN, "%s: %lld %s",
-             S(STR_BENCHMARK_CPU_SCORE), st->score, S(STR_BENCHMARK_CPU_MOPS));
-
-    int t_avg = st->temp_count > 0 ? st->temp_sum / st->temp_count : 0;
-    snprintf(lines[nl++], TEXT_LINE_LEN, "%s: %dC -> %dC -> %dC peak",
-             S(STR_BENCHMARK_CPU_TEMP), st->temp_min, t_avg, st->temp_max);
-
+    /* Read / create baseline */
     int baseline = 0;
     FILE *bf = fopen(CPU_BASELINE_FILE, "r");
     if (bf) { fscanf(bf, "%d", &baseline); fclose(bf); }
 
-    snprintf(lines[nl++], TEXT_LINE_LEN, "%s", "");
-    if (baseline > 0) {
-        int pct = (int)((st->score * 100LL) / baseline);
-        int diff = pct - 100;
-        snprintf(lines[nl++], TEXT_LINE_LEN, "%s %d%%  (%s%d%%)",
-                 S(STR_BENCHMARK_CPU_VS_BASELINE), pct,
-                 diff >= 0 ? "+" : "", diff);
-    } else {
+    int baseline_created = 0;
+    if (baseline <= 0 && st->score > 0) {
         bf = fopen(CPU_BASELINE_FILE, "w");
         if (bf) { fprintf(bf, "%lld\n", st->score); fclose(bf); }
-        snprintf(lines[nl++], TEXT_LINE_LEN, "%s", S(STR_BENCHMARK_CPU_SET_BASELINE));
+        baseline = (int)st->score;
+        baseline_created = 1;
     }
 
-    screen_text(S(STR_BENCHMARK_CPU_RESULT), lines, nl);
-}
-
-static void screen_cpu_benchmark(void) {
-    BenchState st = {0};
-    st.temp_min = 999;
-    st.gcc_ok = 1;
-    snprintf(st.prev_gov, sizeof(st.prev_gov), "%s", read_file(CPU_POLICY "/scaling_governor"));
-
-    SDL_Thread *thread = SDL_CreateThread(cpu_bench_thread, "cpubench", &st);
-    if (!thread) {
-        show_info(S(STR_BENCHMARK_CPU_TITLE), "Thread error");
-        SDL_Delay(2000);
-        return;
+    int pct = 0, diff = 0;
+    if (baseline > 0) {
+        pct = (int)((st->score * 100LL) / baseline);
+        diff = pct - 100;
     }
 
-    Uint32 start = SDL_GetTicks();
-    Uint32 last_sample = 0;
-    int cancelled = 0;
+    int t_avg = st->temp_count > 0 ? st->temp_sum / st->temp_count : 0;
+    char score_str[32];
+    snprintf(score_str, sizeof(score_str), "%lld", st->score);
 
-    while (running && !st.done) {
+    while (running) {
         Keys k = poll_keys();
-        if (k.b) { cancelled = 1; break; }
-
-        Uint32 now = SDL_GetTicks();
-        if (now - last_sample >= 2000) {
-            int t = read_int(CPU_TEMP);
-            if (t > 0) {
-                t /= 1000;
-                if (st.temp_count == 0 || t < st.temp_min) st.temp_min = t;
-                if (t > st.temp_max) st.temp_max = t;
-                st.temp_sum += t;
-                st.temp_count++;
-            }
-            last_sample = now;
-        }
+        if (k.left || k.right) sel ^= 1;
+        if (k.a) return sel == 0;
+        if (k.b || k.sel) return 0;
 
         draw_bg();
         draw_header(S(STR_BENCHMARK_CPU_TITLE), NULL);
 
-        int elapsed = (now - start) / 1000;
-        if (elapsed > 30) elapsed = 30;
-        txt(fnt_med, S(STR_BENCHMARK_CPU_RUNNING), 40, 120, 200, 210, 240);
+        /* Central panel */
+        int panel_w = W - 2*PAD;
+        int panel_h = H - 48 - 26 - 40;
+        int panel_x = PAD;
+        int panel_y = 48 + 10;
+        rounded(panel_x, panel_y, panel_w, panel_h, 12, 16, 18, 34);
 
-        char msg[128];
-        snprintf(msg, sizeof(msg), "%s: %ds / 30s", S(STR_BENCHMARK_CPU_PLEASE_WAIT), elapsed);
-        txt(fnt_sm, msg, 40, 160, 150, 160, 190);
+        int cy = panel_y + 26;
 
-        int pw = (W - 80) * elapsed / 30;
-        if (pw > W - 80) pw = W - 80;
-        rounded(40, 200, W - 80, 24, 6, 16, 18, 34);
-        rounded(42, 202, pw, 20, 4, 60, 100, 220);
+        /* Result label */
+        const char *res_lbl = S(STR_BENCHMARK_CPU_RESULT);
+        txt(fnt_sm, res_lbl, panel_x + panel_w/2 - txtw(fnt_sm, res_lbl)/2, cy, 120, 130, 160);
+        cy += 26;
 
-        if (st.temp_count > 0) {
-            int cur_t = read_int(CPU_TEMP) / 1000;
-            snprintf(msg, sizeof(msg), "%s: %dC (peak %dC)",
-                     S(STR_BENCHMARK_CPU_TEMP), cur_t, st.temp_max);
-            txt(fnt_sm, msg, 40, 250, 150, 160, 190);
+        /* Big score */
+        int score_w = txtw(fnt_big, score_str);
+        txt(fnt_big, score_str, panel_x + panel_w/2 - score_w/2, cy, 100, 160, 255);
+        cy += 50;
+
+        /* Units */
+        int unit_w = txtw(fnt_med, S(STR_BENCHMARK_CPU_MOPS));
+        txt(fnt_med, S(STR_BENCHMARK_CPU_MOPS), panel_x + panel_w/2 - unit_w/2, cy, 150, 160, 190);
+        cy += 48;
+
+        /* Separator */
+        setcol(40, 44, 80);
+        SDL_RenderDrawLine(ren, panel_x + 30, cy, panel_x + panel_w - 30, cy);
+        cy += 24;
+
+        /* Temperature row */
+        char tstr[32];
+        const char *init_lbl = "Initial";
+        const char *avg_lbl = "Average";
+        const char *peak_lbl = "Peak";
+
+        txt(fnt_sm, init_lbl, panel_x + 50, cy, 100, 110, 140);
+        snprintf(tstr, sizeof(tstr), "%dC", st->temp_min);
+        txt(fnt_med, tstr, panel_x + 50, cy + 16, 200, 210, 240);
+
+        txt(fnt_sm, avg_lbl, panel_x + panel_w/2 - txtw(fnt_sm, avg_lbl)/2, cy, 100, 110, 140);
+        snprintf(tstr, sizeof(tstr), "%dC", t_avg);
+        txt(fnt_med, tstr, panel_x + panel_w/2 - txtw(fnt_med, tstr)/2, cy + 16, 200, 210, 240);
+
+        txt(fnt_sm, peak_lbl, panel_x + panel_w - 50 - txtw(fnt_sm, peak_lbl), cy, 100, 110, 140);
+        snprintf(tstr, sizeof(tstr), "%dC", st->temp_max);
+        int peak_txtr = panel_x + panel_w - 50;
+        txtr(fnt_med, tstr, peak_txtr, cy + 16, 255, 180, 80);
+
+        cy += 62;
+
+        /* Baseline */
+        if (baseline > 0) {
+            char base_str[80];
+            if (baseline_created) {
+                snprintf(base_str, sizeof(base_str), "%s", S(STR_BENCHMARK_CPU_SET_BASELINE));
+                txt(fnt_med, base_str, panel_x + panel_w/2 - txtw(fnt_med, base_str)/2, cy, 120, 220, 120);
+            } else {
+                Uint8 rr = diff >= 0 ? 100 : 255;
+                Uint8 gg = diff >= 0 ? 255 : 140;
+                Uint8 bb = diff >= 0 ? 140 : 140;
+                snprintf(base_str, sizeof(base_str), "%d%%  (%s%d%% %s)", pct,
+                         diff >= 0 ? "+" : "", diff, S(STR_BENCHMARK_CPU_VS_BASELINE));
+                txt(fnt_med, base_str, panel_x + panel_w/2 - txtw(fnt_med, base_str)/2, cy, rr, gg, bb);
+            }
         }
 
-        draw_footer(S(STR_B_BACK));
+        /* Buttons */
+        int btn_y = panel_y + panel_h - BTN_H - 18;
+        if (btn_y < cy + 10) btn_y = cy + 10;
+        int txty = btn_y + BTN_H/2 - 10;
+        const char *btn1 = S(STR_BENCHMARK_CPU_RUN_AGAIN);
+        const char *btn2 = S(STR_BENCHMARK_CPU_BACK);
+        int w1 = txtw(fnt_med, btn1);
+        int w2 = txtw(fnt_med, btn2);
+
+        if (sel == 0) {
+            rounded(PAD, btn_y, BTN_W, BTN_H, 8, 30, 60, 180);
+            txt(fnt_med, btn1, PAD + BTN_W/2 - w1/2, txty, 255, 255, 255);
+        } else {
+            rounded(PAD, btn_y, BTN_W, BTN_H, 8, 16, 18, 34);
+            txt(fnt_med, btn1, PAD + BTN_W/2 - w1/2, txty, 130, 135, 160);
+        }
+
+        int bx2 = PAD + BTN_W + 24;
+        if (sel == 1) {
+            rounded(bx2, btn_y, BTN_W, BTN_H, 8, 30, 60, 180);
+            txt(fnt_med, btn2, bx2 + BTN_W/2 - w2/2, txty, 255, 255, 255);
+        } else {
+            rounded(bx2, btn_y, BTN_W, BTN_H, 8, 16, 18, 34);
+            txt(fnt_med, btn2, bx2 + BTN_W/2 - w2/2, txty, 130, 135, 160);
+        }
+
+        draw_footer("[DPAD] Select  [A] Confirm  [B] Back");
         SDL_RenderPresent(ren);
         SDL_Delay(16);
     }
+    return 0;
+}
 
-    SDL_WaitThread(thread, NULL);
+static void screen_cpu_benchmark(void) {
+    int run_again = 1;
+    while (run_again && running) {
+        BenchState st = {0};
+        st.temp_min = 999;
+        st.gcc_ok = 1;
+        snprintf(st.prev_gov, sizeof(st.prev_gov), "%s", read_file(CPU_POLICY "/scaling_governor"));
 
-    if (st.prev_gov[0]) {
-        write_file(CPU_POLICY "/scaling_governor", st.prev_gov);
+        SDL_Thread *thread = SDL_CreateThread(cpu_bench_thread, "cpubench", &st);
+        if (!thread) {
+            show_info(S(STR_BENCHMARK_CPU_TITLE), "Thread error");
+            SDL_Delay(2000);
+            return;
+        }
+
+        Uint32 start = SDL_GetTicks();
+        Uint32 last_sample = 0;
+        int cancelled = 0;
+
+        while (running && !st.done) {
+            Keys k = poll_keys();
+            if (k.b) { cancelled = 1; break; }
+
+            Uint32 now = SDL_GetTicks();
+            if (now - last_sample >= 2000) {
+                int t = read_int(CPU_TEMP);
+                if (t > 0) {
+                    t /= 1000;
+                    if (st.temp_count == 0 || t < st.temp_min) st.temp_min = t;
+                    if (t > st.temp_max) st.temp_max = t;
+                    st.temp_sum += t;
+                    st.temp_count++;
+                }
+                last_sample = now;
+            }
+
+            draw_bg();
+            draw_header(S(STR_BENCHMARK_CPU_TITLE), NULL);
+
+            int elapsed = (now - start) / 1000;
+            if (elapsed > 30) elapsed = 30;
+            txt(fnt_med, S(STR_BENCHMARK_CPU_RUNNING), 40, 120, 200, 210, 240);
+
+            char msg[128];
+            snprintf(msg, sizeof(msg), "%s: %ds / 30s", S(STR_BENCHMARK_CPU_PLEASE_WAIT), elapsed);
+            txt(fnt_sm, msg, 40, 160, 150, 160, 190);
+
+            int pw = (W - 80) * elapsed / 30;
+            if (pw > W - 80) pw = W - 80;
+            rounded(40, 200, W - 80, 24, 6, 16, 18, 34);
+            rounded(42, 202, pw, 20, 4, 60, 100, 220);
+
+            if (st.temp_count > 0) {
+                int cur_t = read_int(CPU_TEMP) / 1000;
+                snprintf(msg, sizeof(msg), "%s: %dC (peak %dC)",
+                         S(STR_BENCHMARK_CPU_TEMP), cur_t, st.temp_max);
+                txt(fnt_sm, msg, 40, 250, 150, 160, 190);
+            }
+
+            draw_footer(S(STR_B_BACK));
+            SDL_RenderPresent(ren);
+            SDL_Delay(16);
+        }
+
+        SDL_WaitThread(thread, NULL);
+
+        if (st.prev_gov[0]) {
+            write_file(CPU_POLICY "/scaling_governor", st.prev_gov);
+        }
+
+        if (cancelled) return;
+
+        if (!st.gcc_ok) {
+            show_info(S(STR_BENCHMARK_CPU_TITLE), S(STR_BENCHMARK_CPU_GCC_MISSING));
+            SDL_Delay(3000);
+            return;
+        }
+
+        run_again = screen_cpu_benchmark_result(&st);
     }
-
-    if (cancelled) return;
-
-    if (!st.gcc_ok) {
-        show_info(S(STR_BENCHMARK_CPU_TITLE), S(STR_BENCHMARK_CPU_GCC_MISSING));
-        SDL_Delay(3000);
-        return;
-    }
-
-    screen_cpu_benchmark_result(&st);
 }
 
 /* ── DTB: Menu principal ─────────────────────────────────────────────────── */
