@@ -166,6 +166,13 @@ typedef enum {
     STR_BENCHMARK_CPU_VS_BASELINE,
     STR_BENCHMARK_CPU_BACK,
     STR_BENCHMARK_CPU_RUN_AGAIN,
+    STR_BENCHMARK_RAM_TITLE,
+    STR_BENCHMARK_RAM_RUNNING,
+    STR_BENCHMARK_RAM_WRITE,
+    STR_BENCHMARK_RAM_COPY,
+    STR_BENCHMARK_RAM_RESULT,
+    STR_BENCHMARK_RAM_MBPS,
+    STR_BENCHMARK_RAM_GCC_MISSING,
     STR_BENCHMARK_NOT_IMPLEMENTED,
     STR_COUNT
 } StringID;
@@ -313,6 +320,13 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_BENCHMARK_CPU_VS_BASELINE] = { "vs baseline", "vs linea base" },
     [STR_BENCHMARK_CPU_BACK] = { "Back", "Atras" },
     [STR_BENCHMARK_CPU_RUN_AGAIN] = { "Run Again", "Repetir" },
+    [STR_BENCHMARK_RAM_TITLE] = { "RAM Benchmark", "Benchmark RAM" },
+    [STR_BENCHMARK_RAM_RUNNING] = { "Measuring memory bandwidth...", "Midiendo ancho de banda..." },
+    [STR_BENCHMARK_RAM_WRITE] = { "Write", "Escritura" },
+    [STR_BENCHMARK_RAM_COPY] = { "Copy", "Copia" },
+    [STR_BENCHMARK_RAM_RESULT] = { "Result", "Resultado" },
+    [STR_BENCHMARK_RAM_MBPS] = { "MB/s", "MB/s" },
+    [STR_BENCHMARK_RAM_GCC_MISSING] = { "gcc not found. Install: apt install gcc", "gcc no encontrado. Instala: apt install gcc" },
     [STR_BENCHMARK_NOT_IMPLEMENTED] = { "Not implemented yet", "No implementado aun" },
 };
 
@@ -2242,6 +2256,256 @@ static void screen_language(void){
     }
 }
 
+/* ── RAM benchmark ───────────────────────────────────────────────────────── */
+#define RAM_BENCH_SRC "/tmp/r36_rambench_sdl.c"
+#define RAM_BENCH_BIN "/tmp/r36_rambench_sdl"
+
+typedef struct {
+    long long write_mbps;
+    long long copy_mbps;
+    int done;
+    int gcc_ok;
+    int temp_min;
+    int temp_max;
+    int temp_sum;
+    int temp_count;
+} RamBenchState;
+
+static int compile_ram_bench(void) {
+    if (access(RAM_BENCH_BIN, X_OK) == 0) return 1;
+    FILE *f = fopen(RAM_BENCH_SRC, "w");
+    if (!f) return 0;
+    fprintf(f,
+        "#include <stdio.h>\n"
+        "#include <stdlib.h>\n"
+        "#include <string.h>\n"
+        "#include <time.h>\n"
+        "#define BUF (128*1024*1024)\n"
+        "#define DUR 15\n"
+        "int main() {\n"
+        "    char *a = malloc(BUF), *b = malloc(BUF);\n"
+        "    if (!a || !b) { puts(\"0\\n0\"); return 1; }\n"
+        "    memset(a, 0xAB, BUF);\n"
+        "    memset(b, 0x00, BUF);\n"
+        "    struct timespec t0, t1;\n"
+        "    long long n, ms;\n"
+        "    n = 0;\n"
+        "    clock_gettime(CLOCK_MONOTONIC, &t0);\n"
+        "    do { memset(b, 0xCD, BUF); n += BUF;\n"
+        "         clock_gettime(CLOCK_MONOTONIC, &t1);\n"
+        "    } while (t1.tv_sec - t0.tv_sec < DUR);\n"
+        "    ms = (t1.tv_sec-t0.tv_sec)*1000+(t1.tv_nsec-t0.tv_nsec)/1000000;\n"
+        "    printf(\"%%lld\\n\", n/1024/1024*1000/ms);\n"
+        "    n = 0;\n"
+        "    clock_gettime(CLOCK_MONOTONIC, &t0);\n"
+        "    do { memcpy(b, a, BUF); n += BUF;\n"
+        "         clock_gettime(CLOCK_MONOTONIC, &t1);\n"
+        "    } while (t1.tv_sec - t0.tv_sec < DUR);\n"
+        "    ms = (t1.tv_sec-t0.tv_sec)*1000+(t1.tv_nsec-t0.tv_nsec)/1000000;\n"
+        "    printf(\"%%lld\\n\", n/1024/1024*1000/ms);\n"
+        "    return 0;\n"
+        "}\n");
+    fclose(f);
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "gcc -O2 -o %s %s 2>/dev/null", RAM_BENCH_BIN, RAM_BENCH_SRC);
+    int rc = system(cmd);
+    return (rc == 0 && access(RAM_BENCH_BIN, X_OK) == 0);
+}
+
+static int ram_bench_thread(void *data) {
+    RamBenchState *st = (RamBenchState *)data;
+    if (!compile_ram_bench()) {
+        st->gcc_ok = 0;
+        st->done = 1;
+        return 0;
+    }
+    st->gcc_ok = 1;
+
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "%s 2>/dev/null", RAM_BENCH_BIN);
+    FILE *f = popen(cmd, "r");
+    if (!f) {
+        st->done = 1;
+        return 0;
+    }
+
+    char line[128];
+    if (fgets(line, sizeof(line), f)) st->write_mbps = atoll(line);
+    if (fgets(line, sizeof(line), f)) st->copy_mbps = atoll(line);
+    pclose(f);
+    st->done = 1;
+    return 0;
+}
+
+static int screen_ram_benchmark_result(RamBenchState *st) {
+    int sel = 0;
+    const int PAD = 24;
+    const int BTN_H = 46;
+    const int BTN_W = (W - 2*PAD - 24) / 2;
+
+    int t_avg = st->temp_count > 0 ? st->temp_sum / st->temp_count : 0;
+    char write_str[32], copy_str[32];
+    fmt_score(st->write_mbps, write_str, sizeof(write_str));
+    fmt_score(st->copy_mbps, copy_str, sizeof(copy_str));
+
+    while (running) {
+        Keys k = poll_keys();
+        if (k.left || k.right) sel ^= 1;
+        if (k.a) return sel == 0;
+        if (k.b || k.sel) return 0;
+
+        draw_bg();
+        draw_header(S(STR_BENCHMARK_RAM_TITLE), NULL);
+
+        int panel_w = W - 2*PAD;
+        int panel_h = H - 48 - 26 - 40;
+        int panel_x = PAD;
+        int panel_y = 48 + 10;
+        rounded(panel_x, panel_y, panel_w, panel_h, 12, 16, 18, 34);
+
+        int cy = panel_y + 30;
+
+        /* Write */
+        const char *w_lbl = S(STR_BENCHMARK_RAM_WRITE);
+        txt(fnt_sm, w_lbl, panel_x + panel_w/2 - txtw(fnt_sm, w_lbl)/2, cy, 100, 110, 140);
+        cy += 24;
+        int w_w = txtw(fnt_big, write_str);
+        txt(fnt_big, write_str, panel_x + panel_w/2 - w_w/2, cy, 100, 160, 255);
+        cy += 48;
+        int unit_w = txtw(fnt_med, S(STR_BENCHMARK_RAM_MBPS));
+        txt(fnt_med, S(STR_BENCHMARK_RAM_MBPS), panel_x + panel_w/2 - unit_w/2, cy, 150, 160, 190);
+        cy += 44;
+
+        /* Separator */
+        setcol(40, 44, 80);
+        SDL_RenderDrawLine(ren, panel_x + 30, cy, panel_x + panel_w - 30, cy);
+        cy += 24;
+
+        /* Copy */
+        const char *c_lbl = S(STR_BENCHMARK_RAM_COPY);
+        txt(fnt_sm, c_lbl, panel_x + panel_w/2 - txtw(fnt_sm, c_lbl)/2, cy, 100, 110, 140);
+        cy += 24;
+        int c_w = txtw(fnt_big, copy_str);
+        txt(fnt_big, copy_str, panel_x + panel_w/2 - c_w/2, cy, 100, 160, 255);
+        cy += 48;
+        txt(fnt_med, S(STR_BENCHMARK_RAM_MBPS), panel_x + panel_w/2 - unit_w/2, cy, 150, 160, 190);
+        cy += 36;
+
+        /* Temperature */
+        char tstr[64];
+        snprintf(tstr, sizeof(tstr), "%s: %dC -> %dC -> %dC peak",
+                 S(STR_BENCHMARK_CPU_TEMP), st->temp_min, t_avg, st->temp_max);
+        txt(fnt_sm, tstr, panel_x + panel_w/2 - txtw(fnt_sm, tstr)/2, cy, 150, 160, 190);
+
+        /* Buttons */
+        int btn_y = panel_y + panel_h - BTN_H - 18;
+        int txty = btn_y + BTN_H/2 - 10;
+        const char *btn1 = S(STR_BENCHMARK_CPU_RUN_AGAIN);
+        const char *btn2 = S(STR_BENCHMARK_CPU_BACK);
+        int w1 = txtw(fnt_med, btn1);
+        int w2 = txtw(fnt_med, btn2);
+
+        if (sel == 0) {
+            rounded(PAD, btn_y, BTN_W, BTN_H, 8, 30, 60, 180);
+            txt(fnt_med, btn1, PAD + BTN_W/2 - w1/2, txty, 255, 255, 255);
+        } else {
+            rounded(PAD, btn_y, BTN_W, BTN_H, 8, 16, 18, 34);
+            txt(fnt_med, btn1, PAD + BTN_W/2 - w1/2, txty, 130, 135, 160);
+        }
+
+        int bx2 = PAD + BTN_W + 24;
+        if (sel == 1) {
+            rounded(bx2, btn_y, BTN_W, BTN_H, 8, 30, 60, 180);
+            txt(fnt_med, btn2, bx2 + BTN_W/2 - w2/2, txty, 255, 255, 255);
+        } else {
+            rounded(bx2, btn_y, BTN_W, BTN_H, 8, 16, 18, 34);
+            txt(fnt_med, btn2, bx2 + BTN_W/2 - w2/2, txty, 130, 135, 160);
+        }
+
+        draw_footer("[DPAD] Select  [A] Confirm  [B] Back");
+        SDL_RenderPresent(ren);
+        SDL_Delay(16);
+    }
+    return 0;
+}
+
+static void screen_ram_benchmark(void) {
+    int run_again = 1;
+    while (run_again && running) {
+        RamBenchState st = {0};
+        st.temp_min = 999;
+        st.gcc_ok = 1;
+
+        SDL_Thread *thread = SDL_CreateThread(ram_bench_thread, "rambench", &st);
+        if (!thread) {
+            show_info(S(STR_BENCHMARK_RAM_TITLE), "Thread error");
+            SDL_Delay(2000);
+            return;
+        }
+
+        Uint32 start = SDL_GetTicks();
+        Uint32 last_sample = 0;
+        int cancelled = 0;
+
+        while (running && !st.done) {
+            Keys k = poll_keys();
+            if (k.b) { cancelled = 1; break; }
+
+            Uint32 now = SDL_GetTicks();
+            if (now - last_sample >= 2000) {
+                int t = read_int(CPU_TEMP);
+                if (t > 0) {
+                    t /= 1000;
+                    if (st.temp_count == 0 || t < st.temp_min) st.temp_min = t;
+                    if (t > st.temp_max) st.temp_max = t;
+                    st.temp_sum += t;
+                    st.temp_count++;
+                }
+                last_sample = now;
+            }
+
+            draw_bg();
+            draw_header(S(STR_BENCHMARK_RAM_TITLE), NULL);
+
+            int elapsed = (now - start) / 1000;
+            if (elapsed > 30) elapsed = 30;
+            txt(fnt_med, S(STR_BENCHMARK_RAM_RUNNING), 40, 120, 200, 210, 240);
+
+            char msg[128];
+            snprintf(msg, sizeof(msg), "%s: %ds / 30s", S(STR_BENCHMARK_CPU_PLEASE_WAIT), elapsed);
+            txt(fnt_sm, msg, 40, 160, 150, 160, 190);
+
+            int pw = (W - 80) * elapsed / 30;
+            if (pw > W - 80) pw = W - 80;
+            rounded(40, 200, W - 80, 24, 6, 16, 18, 34);
+            rounded(42, 202, pw, 20, 4, 60, 100, 220);
+
+            if (st.temp_count > 0) {
+                int cur_t = read_int(CPU_TEMP) / 1000;
+                snprintf(msg, sizeof(msg), "%s: %dC (peak %dC)",
+                         S(STR_BENCHMARK_CPU_TEMP), cur_t, st.temp_max);
+                txt(fnt_sm, msg, 40, 250, 150, 160, 190);
+            }
+
+            draw_footer(S(STR_B_BACK));
+            SDL_RenderPresent(ren);
+            SDL_Delay(16);
+        }
+
+        SDL_WaitThread(thread, NULL);
+
+        if (cancelled) return;
+
+        if (!st.gcc_ok) {
+            show_info(S(STR_BENCHMARK_RAM_TITLE), S(STR_BENCHMARK_RAM_GCC_MISSING));
+            SDL_Delay(3000);
+            return;
+        }
+
+        run_again = screen_ram_benchmark_result(&st);
+    }
+}
+
 /* ── Benchmark submenu ───────────────────────────────────────────────────── */
 static void screen_benchmark(void) {
     LItem items[4];
@@ -2266,6 +2530,7 @@ static void screen_benchmark(void) {
         if (r < 0) break;
         switch (r) {
             case 0: screen_cpu_benchmark(); break;
+            case 1: screen_ram_benchmark(); break;
             default:
                 show_info(S(STR_BENCHMARK), S(STR_BENCHMARK_NOT_IMPLEMENTED));
                 SDL_Delay(1500);
