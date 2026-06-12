@@ -185,6 +185,7 @@ typedef enum {
     STR_BENCHMARK_GPU_PTS,
     STR_BENCHMARK_GPU_FAILED,
     STR_BENCHMARK_GPU_BLACK_SCREEN,
+    STR_BENCHMARK_GPU_REOPEN,
     STR_BENCHMARK_HISTORY_TITLE,
     STR_BENCHMARK_HISTORY_EMPTY,
     STR_BENCHMARK_HISTORY_CLEAR,
@@ -352,6 +353,7 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_BENCHMARK_GPU_PTS] = { "pts", "pts" },
     [STR_BENCHMARK_GPU_FAILED] = { "GPU benchmark failed.", "Benchmark GPU fallido." },
     [STR_BENCHMARK_GPU_BLACK_SCREEN] = { "Screen will go black ~1 min. Continue?", "La pantalla se apagara ~1 min. Continuar?" },
+    [STR_BENCHMARK_GPU_REOPEN] = { "Reopen R36 Tuner Next when EmulationStation returns.", "Vuelve a abrir R36 Tuner Next cuando vuelva EmulationStation." },
     [STR_BENCHMARK_HISTORY_TITLE] = { "Score History", "Historial de puntuaciones" },
     [STR_BENCHMARK_HISTORY_EMPTY] = { "No scores recorded yet.", "Aun no hay puntuaciones." },
     [STR_BENCHMARK_HISTORY_CLEAR] = { "Clear History", "Borrar historial" },
@@ -2751,7 +2753,7 @@ static void create_gpu_runner(void) {
         "TEMP_LOG=/tmp/r36_gpu_bench_temps.txt\n"
         "RESULT=%s\n"
         "THERMAL=/sys/class/thermal/thermal_zone0/temp\n"
-        "get_temp() { awk '{printf \"%%.0f\",$1/1000}' \"$THERMAL\" 2>/dev/null; }\n"
+        "get_temp() { awk '{printf \"%%.0f\\n\",$1/1000}' \"$THERMAL\" 2>/dev/null; }\n"
         "sleep 2\n"
         "systemctl stop emulationstation 2>/dev/null\n"
         "sleep 2\n"
@@ -2828,7 +2830,23 @@ static void screen_gpu_benchmark(void) {
            "EOF\n"
            "systemctl daemon-reload && systemctl start r36-gpu-bench'");
 
-    /* Exit so the runner can take over DRM/KMS. */
+    /* Inform the user before exiting so the runner can take over DRM/KMS. */
+    draw_bg();
+    draw_header(S(STR_BENCHMARK_GPU_TITLE), NULL);
+    txt(fnt_med, S(STR_BENCHMARK_GPU_RUNNING), 40, 130, 200, 210, 240);
+    txt(fnt_sm, S(STR_BENCHMARK_GPU_PENDING), 40, 180, 150, 160, 190);
+    txt(fnt_sm, S(STR_BENCHMARK_GPU_REOPEN), 40, 210, 120, 130, 160);
+    draw_footer("[A] Continue");
+    SDL_RenderPresent(ren);
+
+    Uint32 info_start = SDL_GetTicks();
+    while (running) {
+        Keys k = poll_keys();
+        if (k.a || k.b || k.sel) break;
+        if (SDL_GetTicks() - info_start > 4000) break;
+        SDL_Delay(16);
+    }
+
     running = 0;
 }
 
