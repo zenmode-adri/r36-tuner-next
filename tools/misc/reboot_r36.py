@@ -1,0 +1,10 @@
+﻿import paramiko, time
+c = paramiko.SSHClient()
+c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+c.connect('192.168.1.87', port=22, username='ark', password='ark', timeout=10)
+shell = c.invoke_shell()
+time.sleep(0.5)
+shell.send('echo ark | sudo -S reboot\n')
+time.sleep(3)
+c.close()
+print('reboot enviado')

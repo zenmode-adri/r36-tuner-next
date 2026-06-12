@@ -1,0 +1,13 @@
+﻿import paramiko
+c = paramiko.SSHClient()
+c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+c.connect('192.168.1.87', port=22, username='ark', password='ark', timeout=10)
+_,out,_ = c.exec_command('ls -la /opt/system/launch_tuner.sh')
+print('LAUNCHER PERMS:', out.read().decode().strip())
+_,out,_ = c.exec_command('ls /roms/tuner/')
+print('ROM DIR:', out.read().decode().strip())
+_,out,_ = c.exec_command('ls -la /opt/system/tuner_ui')
+print('BINARY:', out.read().decode().strip())
+_,out,_ = c.exec_command('md5sum /opt/system/tuner_ui')
+print('MD5:', out.read().decode().strip())
+c.close()

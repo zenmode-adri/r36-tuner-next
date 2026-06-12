@@ -1,0 +1,37 @@
+# --- IDE / local config ---
+.claude/settings.local.json
+
+# --- Git backups / nested repos ---
+r36-tuner/.git.bak/
+overclock-r36s/.git/
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+
+# --- Build artifacts (regenerable) ---
+bin/tuner_ui
+bin/*.so
+bin/fdtget
+bin/fdtput
+
+# --- Large media / ROMs / ISOs ---
+assets/roms/
+*.iso
+*.img
+
+# --- Runtime dumps ---
+assets/fb0.raw
+assets/screenshot.*
+logs/*.log
+
+# --- OS images / firmware blobs ---
+firmware/os-images/
+
+# --- Debian packages ---
+packages/*.deb
+
+# --- Session / temp files ---
+SESSION_RESUME.md
+*.tmp
