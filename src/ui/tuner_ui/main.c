@@ -2210,11 +2210,18 @@ static void screen_dtb_main(void) {
         char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
         int bak_ok = (access(bak,F_OK)==0);
         int bin_ok = strcmp(bin_prop,"opp-microvolt")!=0;
+        char bin_tag[16];
+        if (bin_ok) {
+            const char *l = strrchr(bin_prop, '-');
+            snprintf(bin_tag, sizeof(bin_tag), "%s", (l && l[1]=='L') ? l+1 : "OK");
+        } else {
+            snprintf(bin_tag, sizeof(bin_tag), "%s", S(STR_BIN_MISSING));
+        }
 
         LItem items[7]; int n=0;
         strncpy(items[n].label,S(STR_CPU_UNDERVOLT),63);
         strncpy(items[n].desc,S(STR_PATCH_OPP_DTDB),95);
-        strncpy(items[n].tag,bin_ok?S(STR_BIN_OK):S(STR_BIN_MISSING),31); n++;
+        strncpy(items[n].tag,bin_tag,31); n++;
 
         strncpy(items[n].label,S(STR_CPU_OC_1608),63);
         strncpy(items[n].desc,S(STR_UNLOCK_1608_DTB),95);
