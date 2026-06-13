@@ -29,6 +29,16 @@
 - Feat: Score history "Clear History" action added. Press **[Select]** in the history view → confirmation prompt → deletes the log file. Footer updated to show the binding. After clearing, shows "No scores recorded yet" and returns to the benchmark menu.
 - Deploy: `deploy_ui.py` now treats the legacy glmark2 binary as optional (skips upload and data setup if `bin/glmark2-es2-drm-legacy` is absent) instead of aborting. The service unit now logs to journal (`StandardOutput=journal`) for easier post-mortem diagnosis.
 
+**SDL2 UI — i18n, benchmarks, CPU OC awareness (2026-06-13):**
+
+- Fix: i18n leaks — hardcoded Spanish strings in GPU OC, RAM OC, CPU OC, CPU UV, and Language screens now route through `S()`. Affected: submenu hints, `show_info` messages ("Backup fallido", "Parcheando DTB...", "nodo existe"), GPU OC subtitle (also showed "CPU OC 1608 MHz" instead of "GPU OC 600 MHz" — copy-paste bug).
+- Refactor: Removed dead `run_on_tty()` function (forked TTY approach incompatible with DRM/KMS — never called).
+- Feat: CPU OC first-apply warning. Before the voltage selector appears, a confirmation screen explains that stock kernel caps silicon at 1296 MHz and that real OC above 1296 MHz requires the teacupx patched kernel (github.com/teacupx/overclock-r36s, max 1512 MHz). User must press Continue to proceed.
+- Feat: CPU max freq recorded in `BenchState.cpu_mhz` at benchmark start (`scaling_max_freq / 1000`). Shown on result screen as `"Mops/30s @ N MHz"` and written to score log as `"@ N MHz"`. Helps distinguish stock vs OC runs in history.
+- Feat: RAM DDR freq recorded in `RamBenchState.ram_mhz` at benchmark start (`dmc cur_freq / 1000000`). Shown on result screen as `"@ N MHz DDR"` and written to score log. 
+- Refactor: CPU benchmark baseline system fully removed. `CPU_BASELINE_FILE` define, all read/write/display code, and `baseline`/`pct`/`diff` variables deleted. History log is the sole reference for comparing runs.
+- Feat: CPU Max Freq screen detects whether frequencies above 1296 MHz are real (teacupx kernel) or software-only (stock). On first open with max > 1296 MHz, runs a 4-second inline LCG bench and compares to hardcoded stock reference (1024M ops/4s, measured on R36S at -O2). Result cached in `/tmp/r36_oc_detected` (cleared on freq change or reboot). When stock is detected: configured freq shows tag `SET (fake)`, the 1296 MHz entry shows `silicon max` to indicate where hardware actually runs; when teacupx kernel is confirmed: all tags are normal `ACTIVE`.
+
 **SDL2 UI (`src/ui/tuner_ui/main.c`):**
 
 - Feat: Window title and header renamed from `R36 Tuner` to `R36 Tuner Next`; product subtitle left unchanged.

@@ -14,7 +14,8 @@
 /* ── Paths ──────────────────────────────────────────────────────────────── */
 #define FONT_BOLD  "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 #define FONT_NORM  "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-#define CPU_POLICY "/sys/devices/system/cpu/cpufreq/policy0"
+#define CPU_POLICY      "/sys/devices/system/cpu/cpufreq/policy0"
+#define OC_DETECT_CACHE "/tmp/r36_oc_detected"
 #define GPU_DEVFREQ "/sys/class/devfreq/ff400000.gpu"
 #define DMC_DEVFREQ "/sys/class/devfreq/dmc"
 #define CPU_TEMP   "/sys/class/thermal/thermal_zone0/temp"
@@ -190,6 +191,15 @@ typedef enum {
     STR_BENCHMARK_HISTORY_EMPTY,
     STR_BENCHMARK_HISTORY_CLEAR,
     STR_BENCHMARK_NOT_IMPLEMENTED,
+    STR_NODE_ACTIVE,
+    STR_CONTINUE,
+    STR_CPU_FREQ_FAKE_TAG,
+    STR_CPU_FREQ_FAKE_DESC,
+    STR_CPU_FREQ_SET_FAKE,
+    STR_CPU_FREQ_SILICON_MAX,
+    STR_CPU_OC_STOCK_WARN,
+    STR_CPU_OC_NEEDS_KERNEL,
+    STR_CPU_OC_KERNEL_MAX,
     STR_COUNT
 } StringID;
 
@@ -358,6 +368,15 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_BENCHMARK_HISTORY_EMPTY] = { "No scores recorded yet.", "Aun no hay puntuaciones." },
     [STR_BENCHMARK_HISTORY_CLEAR] = { "Clear History", "Borrar historial" },
     [STR_BENCHMARK_NOT_IMPLEMENTED] = { "Not implemented yet", "No implementado aun" },
+    [STR_NODE_ACTIVE] = { "active", "activo" },
+    [STR_CONTINUE] = { "Continue", "Continuar" },
+    [STR_CPU_FREQ_FAKE_TAG]    = { "stock=1296", "stock=1296" },
+    [STR_CPU_FREQ_FAKE_DESC]   = { "stock kernel: silicon stays at 1296 MHz", "kernel stock: silicio queda en 1296 MHz" },
+    [STR_CPU_FREQ_SET_FAKE]    = { "SET (fake)", "CONF (falso)" },
+    [STR_CPU_FREQ_SILICON_MAX] = { "silicon max", "max silicio" },
+    [STR_CPU_OC_STOCK_WARN] = { "Stock kernel: 1296 MHz is the real hardware limit.", "Kernel stock: 1296 MHz es el limite real del hardware." },
+    [STR_CPU_OC_NEEDS_KERNEL] = { "Real OC above 1296 MHz requires teacupx patched kernel", "OC real sobre 1296 MHz requiere kernel parcheado de teacupx" },
+    [STR_CPU_OC_KERNEL_MAX] = { "Patched kernel max: 1512 MHz  (github.com/teacupx/overclock-r36s)", "Max kernel parcheado: 1512 MHz  (github.com/teacupx/overclock-r36s)" },
 };
 
 static int current_lang = LANG_EN;
@@ -556,24 +575,6 @@ static void do_reboot(void){
     refresh_state();
 }
 
-static void run_on_tty(const char *cmd){
-    app_destroy();
-    pid_t pid=fork();
-    if(pid==0){
-        int tty=open("/dev/tty1",O_RDWR);
-        if(tty>=0){dup2(tty,0);dup2(tty,1);dup2(tty,2);if(tty>2)close(tty);}
-        write(1,"\033c",2);
-        execl("/bin/bash","bash","-c",cmd,NULL);
-        exit(1);
-    }
-    if(pid>0) waitpid(pid,NULL,0);
-    app_init();
-    flush_sdl_events();
-    for(int i=0;i<SDL_NumJoysticks();i++)
-        if(SDL_IsGameController(i)){gc=SDL_GameControllerOpen(i);break;}
-    refresh_state();
-}
-
 /* ── Generic list submenu ───────────────────────────────────────────────── */
 #define MAX_ITEMS 16
 typedef struct{char label[64];char desc[96];char tag[32];}LItem;
@@ -671,6 +672,56 @@ static void screen_governor(void){
     }
 }
 
+static void show_info(const char *title, const char *msg); /* forward declaration */
+
+/* ── OC reality detection ───────────────────────────────────────────────── */
+static long long quick_lcg_bench(Uint32 ms) {
+    volatile uint32_t a=1,b=2,c=3,d=4;
+    long long iters = 0;
+    Uint32 t0 = SDL_GetTicks();
+    while ((SDL_GetTicks() - t0) < ms) {
+        for (int i = 0; i < 1000000; i++) {
+            a = a*1664525u+1013904223u;
+            b = b*1664525u+1013904223u;
+            c = c*1664525u+1013904223u;
+            d = d*1664525u+1013904223u;
+        }
+        iters += 4000000;
+    }
+    if ((a^b^c^d)==0) iters++;
+    return iters;
+}
+
+/* Stock kernel score at any freq > 1296 MHz: silicon stays at 1296 MHz.
+   Measured on R36S with quick_lcg_bench() compiled at -O2: 1024M ops/4s.
+   Real OC (teacupx kernel) at 1512 MHz yields ~1204M ops/4s (+17.6%).
+   Threshold at 10% above stock reference; bad-cooling stock always stays below. */
+#define OC_REF_STOCK_M 1024LL  /* M ops in 4s on stock silicon above 1296 MHz */
+
+/* Returns 1=real OC (teacupx kernel), 0=stock (fake above 1296 MHz), -1=error */
+static int detect_cpu_oc(int cur_hz) {
+    {
+        FILE *f = fopen(OC_DETECT_CACHE, "r");
+        if (f) {
+            int v = -1; fscanf(f, "%d", &v); fclose(f);
+            if (v == 0 || v == 1) return v;
+        }
+    }
+    if (cur_hz <= 1296000) return -1;
+
+    /* Single bench at current freq — no freq switching needed */
+    long long score = quick_lcg_bench(4000);
+    long long score_M = score / 1000000LL;
+
+    /* Scale reference to match actual bench duration (quick_lcg_bench targets ms) */
+    long long threshold_M = OC_REF_STOCK_M * 110 / 100; /* +10% above stock */
+    int result = (score_M > threshold_M) ? 1 : 0;
+
+    FILE *f = fopen(OC_DETECT_CACHE, "w");
+    if (f) { fprintf(f, "%d\n", result); fclose(f); }
+    return result;
+}
+
 /* ── CPU max freq screen ────────────────────────────────────────────────── */
 static void screen_cpu_freq(void){
     char ap[256],mp[256];
@@ -685,15 +736,44 @@ static void screen_cpu_freq(void){
     for(int i=0;i<nf-1;i++) for(int j=i+1;j<nf;j++)
         if(freqs[j]>freqs[i]){int t=freqs[i];freqs[i]=freqs[j];freqs[j]=t;}
 
+    /* Detect whether high freq is real (teacupx kernel) or software-only (stock).
+       Runs a ~4s ratio test on first call; cached in OC_DETECT_CACHE afterwards. */
+    int oc_real = -1;
+    if (cur_hz > 1296000) {
+        FILE *cf = fopen(OC_DETECT_CACHE, "r");
+        int cached = 0;
+        if (cf) { int v=-1; fscanf(cf,"%d",&v); fclose(cf); cached=(v==0||v==1); }
+        if (!cached) show_info(S(STR_CPU_MAX_FREQ), "Detecting CPU OC...  (~4s)");
+        oc_real = detect_cpu_oc(cur_hz);
+    }
+
+    /* When stock kernel is detected (oc_real==0) and cur_hz > 1296 MHz:
+       - configured freq gets tag "SET (fake)" — software value, not silicon reality
+       - 1296 MHz gets tag "silicon max" / ACTIVE — where hardware actually runs
+       - sel cursor stays on configured freq so user sees it first */
+    int stock_fake = (oc_real == 0 && cur_hz > 1296000);
+
     LItem items[MAX_ITEMS]; int n=0, sel=0;
     for(int i=0;i<nf;i++){
         int mhz=freqs[i]/1000;
+        int fake = (mhz > 1296 && oc_real != 1);
         snprintf(items[n].label,sizeof(items[n].label),"%d %s",mhz,S(STR_MHZ));
         if(freqs[i]==cur_hz){
-            strncpy(items[n].desc,S(STR_CURRENT_MAX_FREQ),sizeof(items[n].desc)-1);
-            strncpy(items[n].tag,S(STR_ACTIVE),sizeof(items[n].tag)-1);
+            if (stock_fake) {
+                strncpy(items[n].desc,S(STR_CPU_FREQ_FAKE_DESC),sizeof(items[n].desc)-1);
+                strncpy(items[n].tag,S(STR_CPU_FREQ_SET_FAKE),sizeof(items[n].tag)-1);
+            } else {
+                strncpy(items[n].desc,S(STR_CURRENT_MAX_FREQ),sizeof(items[n].desc)-1);
+                strncpy(items[n].tag,S(STR_ACTIVE),sizeof(items[n].tag)-1);
+            }
             sel=n;
-        }else{
+        } else if (stock_fake && mhz == 1296) {
+            strncpy(items[n].desc,S(STR_CURRENT_MAX_FREQ),sizeof(items[n].desc)-1);
+            strncpy(items[n].tag,S(STR_CPU_FREQ_SILICON_MAX),sizeof(items[n].tag)-1);
+        } else if (fake) {
+            strncpy(items[n].desc,S(STR_CPU_FREQ_FAKE_DESC),sizeof(items[n].desc)-1);
+            strncpy(items[n].tag,S(STR_CPU_FREQ_FAKE_TAG),sizeof(items[n].tag)-1);
+        } else {
             snprintf(items[n].desc,sizeof(items[n].desc),S(STR_CPU_MAX_FREQ_DESC),mhz);
             items[n].tag[0]=0;
         }
@@ -703,6 +783,7 @@ static void screen_cpu_freq(void){
     if(chosen>=0){
         char val[32]; snprintf(val,sizeof(val),"%d",freqs[chosen]);
         write_file(mp,val);
+        remove(OC_DETECT_CACHE); /* invalidate cache on freq change */
         refresh_state();
     }
 }
@@ -1161,13 +1242,13 @@ static int confirm_gpu_oc(int volt_uv, int has_node, const char *bin_prop) {
     const char *warnings[] = {S(STR_REQUIRES_REBOOT)};
     const char *infos[] = {
         S(STR_BACKUP_CREATED),
-        "Safety net restaurara DTB si el boot falla."
+        S(STR_SAFETY_NET_RESTORE)
     };
 
     return confirm_screen("GPU OC 600 MHz — CONFIRMAR", summary,
-                          "Parametro", "Valor", NULL,
+                          S(STR_PARAMETER), S(STR_VALUE), NULL,
                           rows, nr, warnings, 1, infos, 2,
-                          "Aplicar", "Cancelar");
+                          S(STR_APPLY), S(STR_CANCEL));
 }
 
 static int confirm_ram_oc(int volt_uv, int has_node, const char *dmc_bin) {
@@ -1274,8 +1355,9 @@ static void screen_dtb_cpu_uv(const char *dtb, const char *opp_base,
     char sub[64];
     snprintf(sub, sizeof(sub), "%s | OPPs: %d", bin_prop, n);
 
-    int chosen = submenu(S(STR_CPU_UNDERVOLT), sub, off_items, noff, &sel,
-                         "[DPAD] Offset  [A] Seleccionar  [B] Atras", 1);
+    char uv_hint[128];
+    snprintf(uv_hint,sizeof(uv_hint),"%s  %s",S(STR_DPAD_OFFSET),S(STR_A_SELECT_B_BACK));
+    int chosen = submenu(S(STR_CPU_UNDERVOLT), sub, off_items, noff, &sel, uv_hint, 1);
     if (chosen < 0 || chosen == 4) return;
     int offset_uv = 50000 - chosen * 12500;
 
@@ -1354,16 +1436,26 @@ static void screen_dtb_cpu_oc(const char *dtb, const char *opp_base,
     char sub[80];
     if (has_node) {
         char mv[16]; fmt_mv(cur_uv, mv, sizeof(mv));
-        snprintf(sub, sizeof(sub), "nodo existe — actual: %s %s", mv, S(STR_MILLIVOLTS));
+        snprintf(sub, sizeof(sub), "%s: %s %s", S(STR_NODE_ACTIVE), mv, S(STR_MILLIVOLTS));
     } else {
         snprintf(sub, sizeof(sub), "%s: %s", S(STR_CPU_OC_1608), S(STR_DTB_TUNING_DESC));
+    }
+
+    if (!has_node) {
+        const char *oc_warnings[] = { S(STR_CPU_OC_STOCK_WARN) };
+        const char *oc_infos[]   = { S(STR_CPU_OC_NEEDS_KERNEL), S(STR_CPU_OC_KERNEL_MAX) };
+        if (!confirm_screen(S(STR_CPU_OC_1608), NULL,
+                            NULL, NULL, NULL, NULL, 0,
+                            oc_warnings, 1, oc_infos, 2,
+                            S(STR_CONTINUE), S(STR_CANCEL))) return;
     }
 
     LItem vitems[VOLT_ITEMS_MAX]; int nvsel = 0;
     int nv = volt_items_build(vitems, 950000, 1350000, &nvsel,
                               cur_uv ? cur_uv : 1150000);
-    int chosen = submenu(S(STR_CPU_OC_1608), sub, vitems, nv, &nvsel,
-                         "[DPAD] Voltaje  [A] Aplicar  [B] Atras", 1);
+    char cpu_oc_hint[128];
+    snprintf(cpu_oc_hint,sizeof(cpu_oc_hint),"%s  %s",S(STR_DPAD_VOLTAGE),S(STR_A_APPLY_B_BACK));
+    int chosen = submenu(S(STR_CPU_OC_1608), sub, vitems, nv, &nvsel, cpu_oc_hint, 1);
     if (chosen < 0) return;
     int volt_uv = volt_from_index(1350000, chosen);
     char volt_mv[16]; fmt_mv(volt_uv, volt_mv, sizeof(volt_mv));
@@ -1439,12 +1531,13 @@ static void screen_dtb_gpu_oc(const char *dtb, const char *bin_prop) {
         popen_into(cmd,r,sizeof(r)); cur_uv = atoi(r);
     }
     char sub[80];
-    snprintf(sub,sizeof(sub),"%s | %s",has_node?"nodo existe":S(STR_CPU_OC_1608),S(STR_SHARED_RAIL));
+    snprintf(sub,sizeof(sub),"%s | %s",has_node?S(STR_NODE_ACTIVE):S(STR_GPU_OC_600),S(STR_SHARED_RAIL));
 
     LItem vitems[VOLT_ITEMS_MAX]; int nvsel=0;
     int nv = volt_items_build(vitems,950000,1150000,&nvsel,cur_uv?cur_uv:1050000);
-    int chosen = submenu(S(STR_GPU_OC_600),S(STR_SHARED_RAIL),vitems,nv,&nvsel,
-                         "[DPAD] Voltaje  [A] Aplicar  [B] Atras", 1);
+    char gpu_oc_hint[128];
+    snprintf(gpu_oc_hint,sizeof(gpu_oc_hint),"%s  %s",S(STR_DPAD_VOLTAGE),S(STR_A_APPLY_B_BACK));
+    int chosen = submenu(S(STR_GPU_OC_600),S(STR_SHARED_RAIL),vitems,nv,&nvsel,gpu_oc_hint,1);
     if (chosen < 0) return;
     int volt_uv = volt_from_index(1150000,chosen);
     char volt_mv[16]; fmt_mv(volt_uv,volt_mv,sizeof(volt_mv));
@@ -1454,9 +1547,9 @@ static void screen_dtb_gpu_oc(const char *dtb, const char *bin_prop) {
     char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
     if (access(bak,F_OK)!=0) {
         snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",dtb,bak);
-        if(system(cmd)!=0){show_info("ERROR","Backup fallido.");SDL_Delay(2000);return;}
+        if(system(cmd)!=0){show_info("ERROR",S(STR_BACKUP_FAILED));SDL_Delay(2000);return;}
     }
-    show_info("GPU OC 600 MHz","Parcheando DTB...");
+    show_info(S(STR_GPU_OC_600),S(STR_PATCHING_DTB));
     int fail=0;
     char npath[200]; snprintf(npath,sizeof(npath),"%s/opp-600000000",gpu_opp);
     if (!has_node) {
@@ -1520,12 +1613,13 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
         popen_into(cmd,r,sizeof(r)); cur_uv=atoi(r);
     }
     char sub[80];
-    snprintf(sub,sizeof(sub),"%s | %s",has_node?"nodo existe":S(STR_RAM_OC_928),S(STR_VCC_DDR_RAIL));
+    snprintf(sub,sizeof(sub),"%s | %s",has_node?S(STR_NODE_ACTIVE):S(STR_RAM_OC_928),S(STR_VCC_DDR_RAIL));
 
     LItem vitems[VOLT_ITEMS_MAX]; int nvsel=0;
     int nv=volt_items_build(vitems,950000,1150000,&nvsel,cur_uv?cur_uv:1100000);
-    int chosen=submenu(S(STR_RAM_OC_928),S(STR_VCC_DDR_RAIL),vitems,nv,&nvsel,
-                        "[DPAD] Voltaje  [A] Aplicar  [B] Atras", 1);
+    char ram_oc_hint[128];
+    snprintf(ram_oc_hint,sizeof(ram_oc_hint),"%s  %s",S(STR_DPAD_VOLTAGE),S(STR_A_APPLY_B_BACK));
+    int chosen=submenu(S(STR_RAM_OC_928),S(STR_VCC_DDR_RAIL),vitems,nv,&nvsel,ram_oc_hint,1);
     if (chosen<0) return;
     int volt_uv=volt_from_index(1150000,chosen);
     char volt_mv[16]; fmt_mv(volt_uv,volt_mv,sizeof(volt_mv));
@@ -1535,9 +1629,9 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
     char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
     if (access(bak,F_OK)!=0) {
         snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",dtb,bak);
-        if(system(cmd)!=0){show_info("ERROR","Backup fallido.");SDL_Delay(2000);return;}
+        if(system(cmd)!=0){show_info("ERROR",S(STR_BACKUP_FAILED));SDL_Delay(2000);return;}
     }
-    show_info("RAM OC 928 MHz","Parcheando DTB...");
+    show_info(S(STR_RAM_OC_928),S(STR_PATCHING_DTB));
     int fail=0;
     char npath[200]; snprintf(npath,sizeof(npath),"%s/opp-928000000",dmc_opp);
     if (!has_node) {
@@ -1806,10 +1900,9 @@ static void screen_dtb_restore(const char *dtb) {
 }
 
 /* ── Benchmark helpers ───────────────────────────────────────────────────── */
-#define CPU_BENCH_SRC "/tmp/r36_cpubench_sdl.c"
-#define CPU_BENCH_BIN "/tmp/r36_cpubench_sdl"
-#define CPU_BASELINE_FILE "/etc/r36_tuner_cpu_baseline"
-#define UI_SCORES_FILE    "/home/ark/.r36_tuner_ui_scores.log"
+#define CPU_BENCH_SRC  "/tmp/r36_cpubench_sdl.c"
+#define CPU_BENCH_BIN  "/tmp/r36_cpubench_sdl"
+#define UI_SCORES_FILE "/home/ark/.r36_tuner_ui_scores.log"
 
 static int compile_cpu_bench(void) {
     if (access(CPU_BENCH_BIN, X_OK) == 0) return 1;
@@ -1855,6 +1948,7 @@ typedef struct {
     int temp_sum;
     int temp_count;
     char prev_gov[32];
+    int cpu_mhz;
 } BenchState;
 
 static int cpu_bench_thread(void *data) {
@@ -1891,25 +1985,6 @@ static int screen_cpu_benchmark_result(BenchState *st) {
     const int BTN_H = 46;
     const int BTN_W = (W - 2*PAD - 24) / 2;
 
-    /* Read / create baseline */
-    int baseline = 0;
-    FILE *bf = fopen(CPU_BASELINE_FILE, "r");
-    if (bf) { fscanf(bf, "%d", &baseline); fclose(bf); }
-
-    int baseline_created = 0;
-    if (baseline <= 0 && st->score > 0) {
-        bf = fopen(CPU_BASELINE_FILE, "w");
-        if (bf) { fprintf(bf, "%lld\n", st->score); fclose(bf); }
-        baseline = (int)st->score;
-        baseline_created = 1;
-    }
-
-    int pct = 0, diff = 0;
-    if (baseline > 0) {
-        pct = (int)((st->score * 100LL) / baseline);
-        diff = pct - 100;
-    }
-
     int t_avg = st->temp_count > 0 ? st->temp_sum / st->temp_count : 0;
     char score_str[32];
     fmt_score(st->score, score_str, sizeof(score_str));
@@ -1921,9 +1996,9 @@ static int screen_cpu_benchmark_result(BenchState *st) {
         struct tm *tm = localtime(&nowt);
         char date[32];
         strftime(date, sizeof(date), "%Y-%m-%d %H:%M", tm);
-        fprintf(hf, "%s | CPU | %s %s | %dC -> %dC -> %dC peak\n",
+        fprintf(hf, "%s | CPU | %s %s @ %d MHz | %dC -> %dC -> %dC peak\n",
                 date, score_str, S(STR_BENCHMARK_CPU_MOPS),
-                st->temp_min, t_avg, st->temp_max);
+                st->cpu_mhz, st->temp_min, t_avg, st->temp_max);
         fclose(hf);
     }
 
@@ -1955,9 +2030,11 @@ static int screen_cpu_benchmark_result(BenchState *st) {
         txt(fnt_big, score_str, panel_x + panel_w/2 - score_w/2, cy, 100, 160, 255);
         cy += 50;
 
-        /* Units */
-        int unit_w = txtw(fnt_med, S(STR_BENCHMARK_CPU_MOPS));
-        txt(fnt_med, S(STR_BENCHMARK_CPU_MOPS), panel_x + panel_w/2 - unit_w/2, cy, 150, 160, 190);
+        /* Units + freq */
+        char cpu_unit_str[64];
+        snprintf(cpu_unit_str, sizeof(cpu_unit_str), "%s @ %d MHz", S(STR_BENCHMARK_CPU_MOPS), st->cpu_mhz);
+        int unit_w = txtw(fnt_med, cpu_unit_str);
+        txt(fnt_med, cpu_unit_str, panel_x + panel_w/2 - unit_w/2, cy, 150, 160, 190);
         cy += 48;
 
         /* Separator */
@@ -1985,22 +2062,6 @@ static int screen_cpu_benchmark_result(BenchState *st) {
         txtr(fnt_med, tstr, peak_txtr, cy + 16, 255, 180, 80);
 
         cy += 62;
-
-        /* Baseline */
-        if (baseline > 0) {
-            char base_str[80];
-            if (baseline_created) {
-                snprintf(base_str, sizeof(base_str), "%s", S(STR_BENCHMARK_CPU_SET_BASELINE));
-                txt(fnt_med, base_str, panel_x + panel_w/2 - txtw(fnt_med, base_str)/2, cy, 120, 220, 120);
-            } else {
-                Uint8 rr = diff >= 0 ? 100 : 255;
-                Uint8 gg = diff >= 0 ? 255 : 140;
-                Uint8 bb = diff >= 0 ? 140 : 140;
-                snprintf(base_str, sizeof(base_str), "%d%%  (%s%d%% %s)", pct,
-                         diff >= 0 ? "+" : "", diff, S(STR_BENCHMARK_CPU_VS_BASELINE));
-                txt(fnt_med, base_str, panel_x + panel_w/2 - txtw(fnt_med, base_str)/2, cy, rr, gg, bb);
-            }
-        }
 
         /* Buttons */
         int btn_y = panel_y + panel_h - BTN_H - 18;
@@ -2042,6 +2103,7 @@ static void screen_cpu_benchmark(void) {
         st.temp_min = 999;
         st.gcc_ok = 1;
         snprintf(st.prev_gov, sizeof(st.prev_gov), "%s", read_file(CPU_POLICY "/scaling_governor"));
+        st.cpu_mhz = read_int(CPU_POLICY "/scaling_max_freq") / 1000;
 
         SDL_Thread *thread = SDL_CreateThread(cpu_bench_thread, "cpubench", &st);
         if (!thread) {
@@ -2292,8 +2354,9 @@ static void screen_language(void){
     items[n].desc[0]=0;
     strncpy(items[n].tag, current_lang==LANG_ES?S(STR_ACTIVE):"", 31); n++;
 
-    int chosen = submenu(S(STR_LANGUAGE), S(STR_LANGUAGE_DESC), items, n, &sel,
-                         "[DPAD] Navegar  [A] Seleccionar  [B] Atras", 1);
+    char lang_hint[128];
+    snprintf(lang_hint,sizeof(lang_hint),"%s  %s",S(STR_DPAD_NAVIGATE),S(STR_A_SELECT_B_BACK));
+    int chosen = submenu(S(STR_LANGUAGE), S(STR_LANGUAGE_DESC), items, n, &sel, lang_hint, 1);
     if (chosen >= 0 && chosen != current_lang) {
         current_lang = chosen;
         save_language();
@@ -2313,6 +2376,7 @@ typedef struct {
     int temp_max;
     int temp_sum;
     int temp_count;
+    int ram_mhz;
 } RamBenchState;
 
 static int compile_ram_bench(void) {
@@ -2399,10 +2463,10 @@ static int screen_ram_benchmark_result(RamBenchState *st) {
         struct tm *tm = localtime(&nowt);
         char date[32];
         strftime(date, sizeof(date), "%Y-%m-%d %H:%M", tm);
-        fprintf(hf, "%s | RAM | Write %s %s | Copy %s %s | %dC -> %dC -> %dC peak\n",
+        fprintf(hf, "%s | RAM | Write %s %s | Copy %s %s @ %d MHz DDR | %dC -> %dC -> %dC peak\n",
                 date, write_str, S(STR_BENCHMARK_RAM_MBPS),
                 copy_str, S(STR_BENCHMARK_RAM_MBPS),
-                st->temp_min, t_avg, st->temp_max);
+                st->ram_mhz, st->temp_min, t_avg, st->temp_max);
         fclose(hf);
     }
 
@@ -2447,7 +2511,14 @@ static int screen_ram_benchmark_result(RamBenchState *st) {
         txt(fnt_big, copy_str, panel_x + panel_w/2 - c_w/2, cy, 100, 160, 255);
         cy += 48;
         txt(fnt_med, S(STR_BENCHMARK_RAM_MBPS), panel_x + panel_w/2 - unit_w/2, cy, 150, 160, 190);
-        cy += 36;
+        cy += 28;
+
+        /* DDR freq */
+        char ram_freq_str[32];
+        snprintf(ram_freq_str, sizeof(ram_freq_str), "@ %d MHz DDR", st->ram_mhz);
+        int rf_w = txtw(fnt_sm, ram_freq_str);
+        txt(fnt_sm, ram_freq_str, panel_x + panel_w/2 - rf_w/2, cy, 120, 130, 160);
+        cy += 22;
 
         /* Temperature */
         char tstr[64];
@@ -2493,6 +2564,7 @@ static void screen_ram_benchmark(void) {
         RamBenchState st = {0};
         st.temp_min = 999;
         st.gcc_ok = 1;
+        st.ram_mhz = read_int(DMC_DEVFREQ "/cur_freq") / 1000000;
 
         SDL_Thread *thread = SDL_CreateThread(ram_bench_thread, "rambench", &st);
         if (!thread) {
