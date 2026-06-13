@@ -373,7 +373,7 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_CPU_FREQ_FAKE_TAG]    = { "stock=1296", "stock=1296" },
     [STR_CPU_FREQ_FAKE_DESC]   = { "stock kernel: silicon stays at 1296 MHz", "kernel stock: silicio queda en 1296 MHz" },
     [STR_CPU_FREQ_SET_FAKE]    = { "SET (fake)", "CONF (falso)" },
-    [STR_CPU_FREQ_SILICON_MAX] = { "silicon max", "max silicio" },
+    [STR_CPU_FREQ_SILICON_MAX] = { "kernel max", "max kernel" },
     [STR_CPU_OC_STOCK_WARN] = { "Stock kernel: 1296 MHz is the real hardware limit.", "Kernel stock: 1296 MHz es el limite real del hardware." },
     [STR_CPU_OC_NEEDS_KERNEL] = { "Real OC above 1296 MHz requires teacupx patched kernel", "OC real sobre 1296 MHz requiere kernel parcheado de teacupx" },
     [STR_CPU_OC_KERNEL_MAX] = { "Patched kernel max: 1512 MHz  (github.com/teacupx/overclock-r36s)", "Max kernel parcheado: 1512 MHz  (github.com/teacupx/overclock-r36s)" },
