@@ -15,6 +15,20 @@
 - Added `r36-tuner/docs/kernel-build.md` with permanent build notes for the patched teacupx kernel.
 - Added `tools/README.md` as a quick index of host-side scripts.
 
+**SDL2 UI — GPU benchmark overhaul (2026-06-13):**
+
+- Fix: GPU benchmark now runs on-screen via `glmark2-es2-drm-legacy` at 320×240 (panel native). Previous 640×480 request caused `Could not initialize canvas` because the KMS driver has no matching mode at that size.
+- Fix: EmulationStation kill sequence changed from `pkill -9 -x emulationstation` (only killed the bash wrapper, leaving the actual binary orphaned with DRM master) to `systemctl kill --kill-who=all -s KILL emulationstation` which kills the entire cgroup. This was the root cause of all `Could not initialize canvas` failures.
+- Fix: VT reset (`clear > /dev/tty1`) added after glmark2 exits so ES renders cleanly at its native resolution; without it the KMS mode set by glmark2 was inherited and caused a zoom effect.
+- Fix: GPU benchmark result file (`/tmp/r36_gpu_bench_result.txt`) is now `chown ark` after writing by the root systemd service. Previously `remove()` silently failed in the tuner (running as `ark`) because `/tmp` has sticky bit and the file was owned by root.
+- Fix: `get_gpu_mhz()` in the runner now uses `printf "%%d\n"` — the missing newline caused all sampled MHz values to concatenate into one token (e.g. `400400400400...520MHz`).
+- Fix: DRM warm-up frame (`SDL_RenderClear` + `SDL_RenderPresent` + 50 ms delay) added at app startup. On DRM/KMS the first page-flip initialises the display buffer; without it `check_gpu_bench_pending()` rendered to a black frame.
+- Fix: `check_gpu_bench_pending()` now calls `SDL_FlushEvents` before its input loop and enforces a 2-second minimum display time, preventing the result screen from disappearing in a single frame when a buffered button press was in the queue.
+- UI: GPU benchmark result screen redesigned to match CPU/RAM style: rounded central panel, large score, `pts` unit, GPU MHz row, horizontal separator, temperature 3-column (Initial / Average / Peak with peak in orange), centered Close button. Replaced the previous flat single-render with a proper render loop.
+- UI: Score history type badge now distinguishes CPU (blue) / RAM (purple) / GPU (orange). Previously GPU entries were displayed with the RAM badge and label.
+- Feat: Score history "Clear History" action added. Press **[Select]** in the history view → confirmation prompt → deletes the log file. Footer updated to show the binding. After clearing, shows "No scores recorded yet" and returns to the benchmark menu.
+- Deploy: `deploy_ui.py` now treats the legacy glmark2 binary as optional (skips upload and data setup if `bin/glmark2-es2-drm-legacy` is absent) instead of aborting. The service unit now logs to journal (`StandardOutput=journal`) for easier post-mortem diagnosis.
+
 **SDL2 UI (`src/ui/tuner_ui/main.c`):**
 
 - Feat: Window title and header renamed from `R36 Tuner` to `R36 Tuner Next`; product subtitle left unchanged.
