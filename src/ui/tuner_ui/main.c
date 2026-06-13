@@ -2118,7 +2118,11 @@ static void screen_cpu_benchmark(void) {
 
         while (running && !st.done) {
             Keys k = poll_keys();
-            if (k.b) { cancelled = 1; break; }
+            if (k.b) {
+                cancelled = 1;
+                system("pkill -x r36_cpubench_sdl 2>/dev/null");
+                break;
+            }
 
             Uint32 now = SDL_GetTicks();
             if (now - last_sample >= 2000) {
@@ -2579,7 +2583,11 @@ static void screen_ram_benchmark(void) {
 
         while (running && !st.done) {
             Keys k = poll_keys();
-            if (k.b) { cancelled = 1; break; }
+            if (k.b) {
+                cancelled = 1;
+                system("pkill -x r36_rambench_sdl 2>/dev/null");
+                break;
+            }
 
             Uint32 now = SDL_GetTicks();
             if (now - last_sample >= 2000) {
