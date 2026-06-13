@@ -33,6 +33,7 @@ typedef enum {
     STR_SELECT,
     STR_APPLY,
     STR_CANCEL,
+    STR_CONFIRM,
     STR_REBOOT,
     STR_LATER,
     STR_NAVIGATE,
@@ -210,6 +211,7 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_SELECT] = { "Select", "Seleccionar" },
     [STR_APPLY] = { "Apply", "Aplicar" },
     [STR_CANCEL] = { "Cancel", "Cancelar" },
+    [STR_CONFIRM] = { "CONFIRM", "CONFIRMAR" },
     [STR_REBOOT] = { "Reboot", "Reboot" },
     [STR_LATER] = { "Later", "Mas tarde" },
     [STR_NAVIGATE] = { "Navigate", "Navegar" },
@@ -1181,7 +1183,8 @@ static int confirm_cpu_uv(const char *bin_prop, OPPEntry opp[], int n, int offse
         S(STR_SAFETY_NET_RESTORE)
     };
 
-    return confirm_screen("CPU UNDERVOLT — CONFIRMAR", summary,
+    char cpu_uv_title[64]; snprintf(cpu_uv_title,sizeof(cpu_uv_title),"%s — %s",S(STR_CPU_UNDERVOLT),S(STR_CONFIRM));
+    return confirm_screen(cpu_uv_title, summary,
                           S(STR_FREQUENCY), S(STR_ACTUAL_COL), S(STR_NEW_COL),
                           rows, nr, warnings, 1, infos, 2,
                           S(STR_APPLY), S(STR_CANCEL));
@@ -1213,7 +1216,8 @@ static int confirm_cpu_oc(int volt_uv, int has_node, const char *bin_prop) {
         S(STR_SAFETY_NET_RESTORE)
     };
 
-    return confirm_screen("CPU OC 1608 MHz — CONFIRMAR", summary,
+    char cpu_oc_title[64]; snprintf(cpu_oc_title,sizeof(cpu_oc_title),"%s — %s",S(STR_CPU_OC_1608),S(STR_CONFIRM));
+    return confirm_screen(cpu_oc_title, summary,
                           S(STR_PARAMETER), S(STR_VALUE), NULL,
                           rows, nr, warnings, 1, infos, 2,
                           S(STR_APPLY), S(STR_CANCEL));
@@ -1245,7 +1249,8 @@ static int confirm_gpu_oc(int volt_uv, int has_node, const char *bin_prop) {
         S(STR_SAFETY_NET_RESTORE)
     };
 
-    return confirm_screen("GPU OC 600 MHz — CONFIRMAR", summary,
+    char gpu_oc_title[64]; snprintf(gpu_oc_title,sizeof(gpu_oc_title),"%s — %s",S(STR_GPU_OC_600),S(STR_CONFIRM));
+    return confirm_screen(gpu_oc_title, summary,
                           S(STR_PARAMETER), S(STR_VALUE), NULL,
                           rows, nr, warnings, 1, infos, 2,
                           S(STR_APPLY), S(STR_CANCEL));
@@ -1277,7 +1282,8 @@ static int confirm_ram_oc(int volt_uv, int has_node, const char *dmc_bin) {
         S(STR_SAFETY_NET_RESTORE)
     };
 
-    return confirm_screen("RAM OC 928 MHz — CONFIRMAR", summary,
+    char ram_oc_title[64]; snprintf(ram_oc_title,sizeof(ram_oc_title),"%s — %s",S(STR_RAM_OC_928),S(STR_CONFIRM));
+    return confirm_screen(ram_oc_title, summary,
                           S(STR_PARAMETER), S(STR_VALUE), NULL,
                           rows, nr, warnings, 1, infos, 2,
                           S(STR_APPLY), S(STR_CANCEL));
