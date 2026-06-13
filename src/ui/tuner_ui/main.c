@@ -1223,25 +1223,21 @@ static int confirm_cpu_oc(int volt_uv, int has_node, const char *bin_prop) {
                           S(STR_APPLY), S(STR_CANCEL));
 }
 
-static int confirm_gpu_oc(int volt_uv, int has_node, const char *bin_prop) {
-    ConfirmRow rows[4];
+static int confirm_gpu_oc(int volt_uv, int cur_uv, int has_node, const char *bin_prop) {
+    ConfirmRow rows[2];
     int nr = 0;
-    char mv[16]; fmt_mv(volt_uv, mv, sizeof(mv));
+    char new_mv[16], cur_mv[16];
+    fmt_mv(volt_uv, new_mv, sizeof(new_mv));
+    if (has_node && cur_uv > 0) fmt_mv(cur_uv, cur_mv, sizeof(cur_mv));
+    else snprintf(cur_mv, sizeof(cur_mv), "--");
 
-    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_FREQUENCY));
-    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "600 %s", S(STR_MHZ)); nr++;
-    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_VALUE));
-    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", mv, S(STR_MILLIVOLTS)); nr++;
-    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "Rail");
-    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", S(STR_SHARED_RAIL)); nr++;
-    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "Bin prop");
-    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", bin_prop); nr++;
+    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "600 %s", S(STR_MHZ));
+    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", cur_mv, S(STR_MILLIVOLTS));
+    snprintf(rows[nr].col3, CONFIRM_COL_LEN, "%s %s", new_mv, S(STR_MILLIVOLTS)); nr++;
 
     char summary[128];
-    if (has_node)
-        snprintf(summary, sizeof(summary), "%s 600 %s @ %s %s", S(STR_GPU_OC_600), S(STR_MHZ), mv, S(STR_MILLIVOLTS));
-    else
-        snprintf(summary, sizeof(summary), "%s 600 %s @ %s %s", S(STR_APPLY), S(STR_MHZ), mv, S(STR_MILLIVOLTS));
+    snprintf(summary, sizeof(summary), "GPU 600 %s @ %s %s (%s)",
+             S(STR_MHZ), new_mv, S(STR_MILLIVOLTS), S(STR_SHARED_RAIL));
 
     const char *warnings[] = {S(STR_REQUIRES_REBOOT)};
     const char *infos[] = {
@@ -1251,7 +1247,7 @@ static int confirm_gpu_oc(int volt_uv, int has_node, const char *bin_prop) {
 
     char gpu_oc_title[64]; snprintf(gpu_oc_title,sizeof(gpu_oc_title),"%s — %s",S(STR_GPU_OC_600),S(STR_CONFIRM));
     return confirm_screen(gpu_oc_title, summary,
-                          S(STR_PARAMETER), S(STR_VALUE), NULL,
+                          S(STR_FREQUENCY), S(STR_ACTUAL_COL), S(STR_NEW_COL),
                           rows, nr, warnings, 1, infos, 2,
                           S(STR_APPLY), S(STR_CANCEL));
 }
@@ -1548,7 +1544,7 @@ static void screen_dtb_gpu_oc(const char *dtb, const char *bin_prop) {
     int volt_uv = volt_from_index(1150000,chosen);
     char volt_mv[16]; fmt_mv(volt_uv,volt_mv,sizeof(volt_mv));
 
-    if (!confirm_gpu_oc(volt_uv, has_node, bin_prop)) return;
+    if (!confirm_gpu_oc(volt_uv, cur_uv, has_node, bin_prop)) return;
 
     char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
     if (access(bak,F_OK)!=0) {
