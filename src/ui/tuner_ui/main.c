@@ -121,6 +121,7 @@ typedef enum {
     STR_REQUIRES_REBOOT,
     STR_BACKUP_CREATED,
     STR_SAFETY_NET_RESTORE,
+    STR_SHARED_RAIL_WARN,
     STR_KERNEL_PANIC_NOTE,
     STR_RESTORE_ORIGINAL_SUMMARY,
     STR_SAFETY_NET_DISABLED,
@@ -296,9 +297,10 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_OC_PATCHED] = { "OC PATCHED", "OC PARCHEADO" },
     [STR_RESTORED] = { "RESTORED", "RESTAURADO" },
     [STR_RESTORE_FAILED] = { "Restore failed.", "Restauracion fallida." },
-    [STR_REQUIRES_REBOOT] = { "Requires reboot.", "Requiere reinicio." },
-    [STR_BACKUP_CREATED] = { "Backup .bak will be created if missing.", "Se creara backup .bak si no existe." },
-    [STR_SAFETY_NET_RESTORE] = { "Safety net will restore DTB if boot fails.", "Safety net restaurara DTB si el boot falla." },
+    [STR_REQUIRES_REBOOT]   = { "Requires reboot.", "Requiere reinicio." },
+    [STR_BACKUP_CREATED]    = { "Backup .bak will be created if missing.", "Se creara backup .bak si no existe." },
+    [STR_SAFETY_NET_RESTORE]= { "Safety net will restore DTB if boot fails.", "Safety net restaurara DTB si el boot falla." },
+    [STR_SHARED_RAIL_WARN]  = { "! GPU and RAM share vdd_logic — voltage affects both.", "! GPU y RAM comparten vdd_logic — voltaje afecta ambos." },
     [STR_KERNEL_PANIC_NOTE] = { "(does not protect kernel panics)", "(no protege kernel panics)" },
     [STR_RESTORE_ORIGINAL_SUMMARY] = { "Revert to original backup", "Revertir al backup original" },
     [STR_SAFETY_NET_DISABLED] = { "Safety net will also be disabled.", "Safety net tambien se desactivara." },
@@ -1239,7 +1241,7 @@ static int confirm_gpu_oc(int volt_uv, int cur_uv, int has_node, const char *bin
     snprintf(summary, sizeof(summary), "GPU 600 %s @ %s %s (%s)",
              S(STR_MHZ), new_mv, S(STR_MILLIVOLTS), S(STR_SHARED_RAIL));
 
-    const char *warnings[] = {S(STR_REQUIRES_REBOOT)};
+    const char *warnings[] = {S(STR_REQUIRES_REBOOT), S(STR_SHARED_RAIL_WARN)};
     const char *infos[] = {
         S(STR_BACKUP_CREATED),
         S(STR_SAFETY_NET_RESTORE)
@@ -1248,31 +1250,27 @@ static int confirm_gpu_oc(int volt_uv, int cur_uv, int has_node, const char *bin
     char gpu_oc_title[64]; snprintf(gpu_oc_title,sizeof(gpu_oc_title),"%s — %s",S(STR_GPU_OC_600),S(STR_CONFIRM));
     return confirm_screen(gpu_oc_title, summary,
                           S(STR_FREQUENCY), S(STR_ACTUAL_COL), S(STR_NEW_COL),
-                          rows, nr, warnings, 1, infos, 2,
+                          rows, nr, warnings, 2, infos, 2,
                           S(STR_APPLY), S(STR_CANCEL));
 }
 
-static int confirm_ram_oc(int volt_uv, int has_node, const char *dmc_bin) {
-    ConfirmRow rows[4];
+static int confirm_ram_oc(int volt_uv, int cur_uv, int has_node, const char *dmc_bin) {
+    ConfirmRow rows[2];
     int nr = 0;
-    char mv[16]; fmt_mv(volt_uv, mv, sizeof(mv));
+    char new_mv[16], cur_mv[16];
+    fmt_mv(volt_uv, new_mv, sizeof(new_mv));
+    if (has_node && cur_uv > 0) fmt_mv(cur_uv, cur_mv, sizeof(cur_mv));
+    else snprintf(cur_mv, sizeof(cur_mv), "--");
 
-    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_FREQUENCY));
-    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "928 %s (ATF: 924 %s)", S(STR_MHZ), S(STR_MHZ)); nr++;
-    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_VALUE));
-    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", mv, S(STR_MILLIVOLTS)); nr++;
-    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "Rail");
-    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", S(STR_SHARED_RAIL)); nr++;
-    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "Bin prop");
-    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", dmc_bin); nr++;
+    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "928 %s", S(STR_MHZ));
+    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", cur_mv, S(STR_MILLIVOLTS));
+    snprintf(rows[nr].col3, CONFIRM_COL_LEN, "%s %s", new_mv, S(STR_MILLIVOLTS)); nr++;
 
     char summary[128];
-    if (has_node)
-        snprintf(summary, sizeof(summary), "%s 928 %s @ %s %s", S(STR_RAM_OC_928), S(STR_MHZ), mv, S(STR_MILLIVOLTS));
-    else
-        snprintf(summary, sizeof(summary), "%s 928 %s @ %s %s", S(STR_APPLY), S(STR_MHZ), mv, S(STR_MILLIVOLTS));
+    snprintf(summary, sizeof(summary), "RAM 928 %s @ %s %s (%s)",
+             S(STR_MHZ), new_mv, S(STR_MILLIVOLTS), S(STR_VCC_DDR_RAIL));
 
-    const char *warnings[] = {S(STR_REQUIRES_REBOOT)};
+    const char *warnings[] = {S(STR_REQUIRES_REBOOT), S(STR_SHARED_RAIL_WARN)};
     const char *infos[] = {
         S(STR_BACKUP_CREATED),
         S(STR_SAFETY_NET_RESTORE)
@@ -1280,8 +1278,8 @@ static int confirm_ram_oc(int volt_uv, int has_node, const char *dmc_bin) {
 
     char ram_oc_title[64]; snprintf(ram_oc_title,sizeof(ram_oc_title),"%s — %s",S(STR_RAM_OC_928),S(STR_CONFIRM));
     return confirm_screen(ram_oc_title, summary,
-                          S(STR_PARAMETER), S(STR_VALUE), NULL,
-                          rows, nr, warnings, 1, infos, 2,
+                          S(STR_FREQUENCY), S(STR_ACTUAL_COL), S(STR_NEW_COL),
+                          rows, nr, warnings, 2, infos, 2,
                           S(STR_APPLY), S(STR_CANCEL));
 }
 
@@ -1626,7 +1624,7 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
     int volt_uv=volt_from_index(1150000,chosen);
     char volt_mv[16]; fmt_mv(volt_uv,volt_mv,sizeof(volt_mv));
 
-    if (!confirm_ram_oc(volt_uv, has_node, dmc_bin)) return;
+    if (!confirm_ram_oc(volt_uv, cur_uv, has_node, dmc_bin)) return;
 
     char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
     if (access(bak,F_OK)!=0) {
