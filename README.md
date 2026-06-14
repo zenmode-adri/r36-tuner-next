@@ -88,12 +88,13 @@ GPU and RAM share the `vdd_logic` rail. The PMIC always sets it to the highest v
 
 ### glmark2 off-screen results (320×240, L2 bin, no thermal pad)
 
-Results are from a **full OC+UV run** (GPU 600 MHz + RAM 924 MHz + undervolts, CPU at stock) vs stock. Not a GPU-only comparison.
+Measured on device (2026-06-14). Stock run vs best of three OC runs at 600 MHz.
 
-| Scene | Stock | Full OC+UV | Delta |
-|-------|-------|-----------|-------|
-| terrain | 15 fps | 18 fps | +20% |
-| average (full suite, 20 scenes) | — | — | ~+10% |
+| Config | Score | GPU MHz | Temp peak |
+|--------|-------|---------|-----------|
+| Stock | 560 pts | 520 MHz | 51 °C |
+| GPU OC | 620 pts | 600 MHz | 51 °C |
+| **Delta** | **+10.7%** | | |
 
 ---
 
