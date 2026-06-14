@@ -1,5 +1,7 @@
 # R36 Tuner
 
+> **Superseded by [R36 Tuner Next](https://github.com/zenmode-adri/r36-tuner-next)** — native SDL2 UI with live benchmarks, GPU off-screen mode, and improved DTB safety. This repo is kept for reference.
+
 [![GitHub release](https://img.shields.io/github/v/release/zenmode-adri/r36-tuner?style=flat-square)](https://github.com/zenmode-adri/r36-tuner/releases)
 [![GitHub stars](https://img.shields.io/github/stars/zenmode-adri/r36-tuner?style=flat-square)](https://github.com/zenmode-adri/r36-tuner/stargazers)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&style=flat-square)](https://ko-fi.com/zenmodeadri)
