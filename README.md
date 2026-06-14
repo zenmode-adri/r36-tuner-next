@@ -76,19 +76,32 @@ The tuner auto-detects your chip bin from `dmesg` (`pvtm-volt-sel`) and patches 
 
 | Component | Stock | OC + UV |
 |-----------|-------|---------|
-| CPU (vdd_arm) | — | undervolt via DTB patch — OC requires [teacupx](https://github.com/teacupx/overclock-r36s) |
+| CPU (vdd_arm) | 1300 mV @ 1296 MHz | 1175 mV — OC requires [teacupx](https://github.com/teacupx/overclock-r36s) |
 | GPU (vdd_logic) | 1100 mV @ 520 MHz | 1025 mV @ 600 MHz |
-| RAM (vdd_logic) | — @ 786 MHz | 987.5 mV @ 924 MHz |
+| RAM (vdd_logic) | ~1025 mV @ 786 MHz | 987.5 mV @ 924 MHz |
 
 > Results represent one chip. Silicon lottery applies — always validate stability after each change.
 
 ### vdd_logic shared rail
 
-GPU and RAM share the `vdd_logic` rail. The PMIC always sets it to the highest voltage demanded by either consumer. To lower the effective rail both must be undervolted below the target.
+GPU and RAM share the `vdd_logic` rail. The PMIC always sets it to the **highest voltage demanded by any consumer**.
+
+- GPU OC at 1025 mV + DMC OC at 987.5 mV → rail = **1025 mV** (GPU wins)
+- To lower the effective rail, **both** must be undervolted below the target
+- Undervolting only one has no rail benefit if the other is higher
+
+**Tested voltage floors (L2 bin):**
+
+| Component | OC freq | Voltage floor |
+|-----------|--------:|--------------:|
+| GPU | 600 MHz | **1025 mV** |
+| DMC | 924 MHz | **987.5 mV** |
+
+**Tuning voltage after first apply:** enter the GPU OC / RAM OC menu at any time — the tuner detects the existing OPP node and goes directly to a voltage selector. Select a new voltage, confirm, reboot.
 
 ### glmark2 off-screen results
 
-> Platform: 320×240, L2 bin — measured 2026-06-14. Best of three OC runs.
+> Platform: 320×240, L2 bin, glmark2-es2-drm 2021.02 (4 scenes: build / texture / shading / terrain) — measured 2026-06-14. Best of three OC runs.
 
 | Config | Score | GPU MHz | Peak temp |
 |--------|------:|--------:|----------:|
