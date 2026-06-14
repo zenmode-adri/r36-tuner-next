@@ -16,7 +16,7 @@ Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](ht
 
 ### DTB Tuning (permanent, reboot required)
 - **CPU undervolt** — patches `vdd_arm` OPP table. Auto-detects chip bin (L0–L3) and patches the correct voltage property. Uniform offset or per-frequency fine-tune.
-- **CPU OC 1608 MHz** — unlocks 1608 MHz via DTB patch. No kernel recompile needed.
+- **CPU OC 1608 MHz** — adds a 1608 MHz OPP via DTB patch. The teacupx kernel shipped with dArkOSRE already supports this clock rate; the stock DTB suppresses it.
 - **GPU OC 600 MHz** — adds a 600 MHz OPP node to the Mali-G31 table.
 - **RAM OC 928 MHz** — adds a 928 MHz OPP to the DMC table. ATF delivers 924 MHz (nearest PLL divisor).
 - **DTB safety net** — early-boot systemd service confirms the patched DTB survived the boot and clears the watchdog flag. If the device won't boot, original DTB is restored manually via SD card (instructions in-app).
@@ -87,10 +87,12 @@ GPU and RAM share the `vdd_logic` rail. The PMIC always sets it to the highest v
 
 ### glmark2 off-screen results (320×240, L2 bin, no thermal pad)
 
-| Scene | Stock (520 MHz) | OC (600 MHz) | Delta |
-|-------|----------------|--------------|-------|
+Results are from a **full OC+UV run** (CPU 1608 MHz + GPU 600 MHz + RAM 924 MHz + undervolts) vs stock. Not a GPU-only comparison.
+
+| Scene | Stock | Full OC+UV | Delta |
+|-------|-------|-----------|-------|
 | terrain | 15 fps | 18 fps | +20% |
-| average (20 scenes) | — | — | ~+10% |
+| average (full suite, 20 scenes) | — | — | ~+10% |
 
 ---
 
