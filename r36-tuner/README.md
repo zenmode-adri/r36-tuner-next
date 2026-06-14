@@ -11,7 +11,7 @@ Real-time CPU / GPU / DMC / Voltage tuning tool for R36S and compatible devices 
 - GPU max frequency selection
 - DMC / RAM max frequency selection
 - **DTB undervolt** — permanent voltage reduction via OPP table patch. Detects your chip bin (L0–L3) automatically and patches only the correct voltage table. Uniform mode or per-OPP fine-tune.
-- **CPU OC to 1608 MHz** — adds a 1608 MHz OPP via DTB patch and sets `rockchip,avs-scale=0`. The dArkOSRE kernel clock driver already includes 1608 MHz; the stock DTB removes it at boot via `avs-scale=4`. No kernel recompile needed.
+- **CPU OC** — requires [teacupx kernel](https://github.com/teacupx/overclock-r36s) (installed separately). Once active, the tuner lets you adjust CPU voltages to find a stable floor. Max real freq with teacupx: 1512 MHz.
 - **GPU OC to 600 MHz** — adds 600 MHz OPP via DTB patch.
 - **RAM OC to 928 MHz** — adds 928 MHz OPP via DTB patch. ATF delivers 924 MHz (nearest PLL divisor).
 - **DTB safety net** — early-boot systemd service detects if the previous boot hung after a DTB patch and restores the original backup before userspace starts.
@@ -58,19 +58,19 @@ The tuner detects your chip bin from `dmesg` (`pvtm-volt-sel`) and patches the c
 
 Adds a `opp-600000000` node to the GPU OPP table in the DTB. The GPU clock uses `gpll / 2 = 600 MHz` exactly — no clock driver changes needed.
 
-**Results on our unit (L2 bin):** terrain +20% in full OC+UV benchmark (CPU 1608 MHz + GPU 600 MHz + RAM 924 MHz + undervolts vs stock — not GPU-only). Tested stable floor: **1025 mV** (−125 mV from initial OC voltage of 1150 mV). Your chip may differ.
+**Results on our unit (L2 bin):** terrain +20% in full OC+UV benchmark (GPU 600 MHz + RAM 924 MHz + undervolts vs stock, CPU at stock — not GPU-only). Tested stable floor: **1025 mV** (−125 mV from initial OC voltage of 1150 mV). Your chip may differ.
 
 > `vdd_logic` is shared between GPU and DMC. See [vdd_logic shared rail](#vdd_logic-shared-rail--gpu--ram-oc-voltage).
 
 For full voltage sweep and clock analysis see [docs/opp-research.md](docs/opp-research.md).
 
-## CPU OC — 1608 MHz
+## CPU OC — via teacupx kernel
 
-Unlocks 1608 MHz by patching `rockchip,avs-scale` from `4` to `0` in the DTB and adding an `opp-1608000000` node. The clock driver already contains 1608 MHz — it was being suppressed at boot.
+CPU overclock above ~1296 MHz requires the [teacupx kernel](https://github.com/teacupx/overclock-r36s) installed separately. The stock dArkOSRE kernel does not run above ~1296 MHz in practice regardless of what sysfs reports.
 
-**Tested voltage on our unit (L2 bin): 1187.5 mV.** Seven synthetic benchmarks showed 0–2% difference vs 1512 MHz — the A35 pipeline hits throughput and latency ceilings before 1608 MHz on single-thread workloads. Real benefit is in emulation: JIT recompilation and multi-thread frame timing. The bigger single win is undervolting 1512 MHz to 1175 mV.
+With teacupx installed, the tuner lets you adjust CPU voltages at each OPP to find stable floors. Max real freq with teacupx: **1512 MHz**.
 
-For full benchmark breakdown see [docs/opp-research.md](docs/opp-research.md).
+The biggest single CPU win is **undervolting at stock OPP** — reducing vdd_arm at 1296 MHz lowers heat without any OC risk.
 
 ## RAM OC — 928 MHz
 
@@ -130,8 +130,8 @@ Measured on the same unit (L2 bin), **without thermal pad**. glmark2-es2-drm 202
 
 | Configuration | GPU | CPU | DMC | vdd_arm | vdd_logic |
 |---|---|---|---|---|---|
-| **Stock** | 520 MHz | 1512 MHz | 786 MHz | ~1200 mV | ~1100 mV |
-| **OC + UV** | 600 MHz | 1608 MHz | 924 MHz | 1187.5 mV | 1025 mV |
+| **Stock** | 520 MHz | stock | 786 MHz | ~1200 mV | ~1100 mV |
+| **GPU + RAM OC + UV** | 600 MHz | stock | 924 MHz | UV only | 1025 mV |
 
 | Scene | Stock | OC+UV | Delta |
 |---|---|---|---|

@@ -16,7 +16,7 @@ Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](ht
 
 ### DTB Tuning (permanent, reboot required)
 - **CPU undervolt** — patches `vdd_arm` OPP table. Auto-detects chip bin (L0–L3) and patches the correct voltage property. Uniform offset or per-frequency fine-tune.
-- **CPU OC 1608 MHz** — adds a 1608 MHz OPP via DTB patch and sets `rockchip,avs-scale=0`. The dArkOSRE kernel clock driver already includes 1608 MHz; the stock DTB removes it at boot via `avs-scale=4`. No kernel recompile needed.
+- **CPU OC** — requires [teacupx kernel](https://github.com/teacupx/overclock-r36s) (installed separately). Once active, the tuner lets you adjust CPU voltages to find a stable floor. Max real freq with teacupx: 1512 MHz.
 - **GPU OC 600 MHz** — adds a 600 MHz OPP node to the Mali-G31 table.
 - **RAM OC 928 MHz** — adds a 928 MHz OPP to the DMC table. ATF delivers 924 MHz (nearest PLL divisor).
 - **DTB safety net** — early-boot systemd service confirms the patched DTB survived the boot and clears the watchdog flag. If the device won't boot, original DTB is restored manually via SD card (instructions in-app).
@@ -75,7 +75,7 @@ The tuner auto-detects your chip bin from `dmesg` (`pvtm-volt-sel`) and patches 
 
 | Component | Stock | OC + UV |
 |-----------|-------|---------|
-| CPU (vdd_arm) | 1300 mV @ 1512 MHz | 1187.5 mV @ 1608 MHz |
+| CPU (vdd_arm) | — | undervolt via DTB patch — OC requires [teacupx](https://github.com/teacupx/overclock-r36s) |
 | GPU (vdd_logic) | 1100 mV @ 520 MHz | 1025 mV @ 600 MHz |
 | RAM (vdd_logic) | — @ 786 MHz | 987.5 mV @ 924 MHz |
 
@@ -87,7 +87,7 @@ GPU and RAM share the `vdd_logic` rail. The PMIC always sets it to the highest v
 
 ### glmark2 off-screen results (320×240, L2 bin, no thermal pad)
 
-Results are from a **full OC+UV run** (CPU 1608 MHz + GPU 600 MHz + RAM 924 MHz + undervolts) vs stock. Not a GPU-only comparison.
+Results are from a **full OC+UV run** (GPU 600 MHz + RAM 924 MHz + undervolts, CPU at stock) vs stock. Not a GPU-only comparison.
 
 | Scene | Stock | Full OC+UV | Delta |
 |-------|-------|-----------|-------|
