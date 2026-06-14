@@ -3,6 +3,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/zenmode-adri/r36-tuner-next?style=flat-square)](https://github.com/zenmode-adri/r36-tuner-next/releases)
 [![GitHub stars](https://img.shields.io/github/stars/zenmode-adri/r36-tuner-next?style=flat-square)](https://github.com/zenmode-adri/r36-tuner-next/stargazers)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&style=flat-square)](https://ko-fi.com/zenmodeadri)
+[![AI Assisted](https://img.shields.io/badge/AI--assisted-Claude-blueviolet?style=flat-square)](https://claude.ai)
 
 Real-time CPU / GPU / DMC / Voltage tuning tool for R36S and compatible devices running [dArkOSRE-R36](https://github.com/southoz/dArkOSRE-R36) (RK3326 SoC).
 
