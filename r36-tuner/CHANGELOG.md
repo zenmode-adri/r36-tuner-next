@@ -1,8 +1,8 @@
 # R36 Tuner Next — Changelog
 
-## Unreleased
+## v1.0 — 2026-06-14 (r36-tuner-next SDL2 UI initial release)
 
-**SDL2 UI — GPU benchmark off-screen, safety net fix, score history (2026-06-14):**
+**SDL2 UI — GPU benchmark off-screen, safety net fix, score history:**
 
 - Fix: DTB safety net script (`r36-dtb-safety.sh`) had inverted logic — it restored the original DTB backup on every successful boot after patching, causing GPU/CPU/RAM OC to silently disappear after the second reboot. Root cause: `BOOTING` flag present → should only clear the flag (boot was successful), but code also ran `cp ${DTB}.bak $DTB`. Removed the restore; boot confirmation now only clears the flag.
 - Hardened DTB safety script: added `sync` after `rm -f $BOOTING`, clears both `BOOTING` and `PENDING` if they coexist, uses explicit `if` instead of `&&` chain for `PENDING` branch.
@@ -12,7 +12,7 @@
 - Fix: RAM benchmark result screen — temperature text could be hidden behind the Run Again/Back buttons when content height exceeded panel space. `btn_y` is now computed as `max(panel_bottom_fixed, cy + 4)` so buttons always render below all text.
 - Fix: Score history — GPU benchmark runner (systemd, User=root) creates `/home/ark/.r36_tuner_ui_scores.log` as `root:root 644`. Subsequent CPU/RAM benchmark writes (tuner_ui runs as `ark`) silently failed. GPU runner now calls `chown ark` on the scores file after writing.
 
-## Unreleased (previous)
+## v1.0 (continued) — earlier SDL2 UI work
 
 **Workspace / infrastructure:**
 
