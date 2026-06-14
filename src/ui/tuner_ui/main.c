@@ -252,7 +252,7 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_ENGLISH] = { "English", "English" },
     [STR_SPANISH] = { "Spanish", "Espanol" },
     [STR_CPU_UNDERVOLT] = { "CPU Undervolt", "CPU Undervolt" },
-    [STR_CPU_OC_1608] = { "CPU OC 1608 MHz", "CPU OC 1608 MHz" },
+    [STR_CPU_OC_1608] = { "CPU OC (teacupx)", "CPU OC (teacupx)" },
     [STR_GPU_OC_600] = { "GPU OC 600 MHz", "GPU OC 600 MHz" },
     [STR_RAM_OC_928] = { "RAM OC 928 MHz", "RAM OC 928 MHz" },
     [STR_DIAG_OPP] = { "OPP Voltages", "Voltajes OPP" },
@@ -276,7 +276,7 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_BIN_OK] = { "bin OK", "bin OK" },
     [STR_BIN_MISSING] = { "!bin", "!bin" },
     [STR_PATCH_OPP_DTDB] = { "Patch OPP voltages via DTB", "Patch voltajes OPP via DTB" },
-    [STR_UNLOCK_1608_DTB] = { "Unlock 1608 MHz via DTB", "Desbloquear 1608 MHz via DTB" },
+    [STR_UNLOCK_1608_DTB] = { "DTB patch + avs-scale (teacupx required)", "DTB patch + avs-scale (requiere teacupx)" },
     [STR_ADD_OPP_600] = { "Add 600 MHz OPP (Mali-G31)", "Agregar OPP 600 MHz (Mali-G31)" },
     [STR_ADD_OPP_928] = { "Add 928 MHz OPP (DMC)", "Agregar OPP 928 MHz (DMC)" },
     [STR_VIEW_OPP_TABLE] = { "View current OPP table on disk", "Ver tabla OPP actual en disco" },
@@ -1200,7 +1200,7 @@ static int confirm_cpu_oc(int volt_uv, int has_node, const char *bin_prop) {
     char mv[16]; fmt_mv(volt_uv, mv, sizeof(mv));
 
     snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_FREQUENCY));
-    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "1608 %s", S(STR_MHZ)); nr++;
+    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "1512 %s max (teacupx)", S(STR_MHZ)); nr++;
     snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_VALUE));
     snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", mv, S(STR_MILLIVOLTS)); nr++;
     snprintf(rows[nr].col1, CONFIRM_COL_LEN, "AVS scale");
@@ -1210,9 +1210,9 @@ static int confirm_cpu_oc(int volt_uv, int has_node, const char *bin_prop) {
 
     char summary[128];
     if (has_node)
-        snprintf(summary, sizeof(summary), "%s 1608 %s @ %s %s", S(STR_CPU_OC_1608), S(STR_MHZ), mv, S(STR_MILLIVOLTS));
+        snprintf(summary, sizeof(summary), "%s @ %s %s", S(STR_CPU_OC_1608), mv, S(STR_MILLIVOLTS));
     else
-        snprintf(summary, sizeof(summary), "%s 1608 %s @ %s %s", S(STR_APPLY), S(STR_MHZ), mv, S(STR_MILLIVOLTS));
+        snprintf(summary, sizeof(summary), "%s @ %s %s", S(STR_CPU_OC_1608), mv, S(STR_MILLIVOLTS));
 
     const char *warnings[] = {S(STR_REQUIRES_REBOOT)};
     const char *infos[] = {
@@ -1496,7 +1496,7 @@ static void screen_dtb_cpu_oc(const char *dtb, const char *opp_base,
 
     if (!fail) {
         dtb_mark_pending(); dtb_setup_safety();
-        char msg[80]; snprintf(msg,sizeof(msg),"1608 %s @ %s %s aplicado.",S(STR_MHZ),volt_mv,S(STR_MILLIVOLTS));
+        char msg[80]; snprintf(msg,sizeof(msg),"CPU OC @ %s %s aplicado.",volt_mv,S(STR_MILLIVOLTS));
         if (confirm_reboot(S(STR_OC_PATCHED), msg))
             do_reboot();
     } else {
