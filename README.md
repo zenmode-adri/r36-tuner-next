@@ -16,7 +16,7 @@ Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](ht
 
 ### DTB Tuning (permanent, reboot required)
 - **CPU undervolt** — patches `vdd_arm` OPP table. Auto-detects chip bin (L0–L3) and patches the correct voltage property. Uniform offset or per-frequency fine-tune.
-- **CPU OC 1608 MHz** — adds a 1608 MHz OPP via DTB patch. The teacupx kernel shipped with dArkOSRE already supports this clock rate; the stock DTB suppresses it.
+- **CPU OC 1608 MHz** — adds a 1608 MHz OPP via DTB patch and sets `rockchip,avs-scale=0`. The dArkOSRE kernel clock driver already includes 1608 MHz; the stock DTB removes it at boot via `avs-scale=4`. No kernel recompile needed.
 - **GPU OC 600 MHz** — adds a 600 MHz OPP node to the Mali-G31 table.
 - **RAM OC 928 MHz** — adds a 928 MHz OPP to the DMC table. ATF delivers 924 MHz (nearest PLL divisor).
 - **DTB safety net** — early-boot systemd service confirms the patched DTB survived the boot and clears the watchdog flag. If the device won't boot, original DTB is restored manually via SD card (instructions in-app).

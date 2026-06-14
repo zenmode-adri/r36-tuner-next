@@ -11,7 +11,7 @@ Real-time CPU / GPU / DMC / Voltage tuning tool for R36S and compatible devices 
 - GPU max frequency selection
 - DMC / RAM max frequency selection
 - **DTB undervolt** — permanent voltage reduction via OPP table patch. Detects your chip bin (L0–L3) automatically and patches only the correct voltage table. Uniform mode or per-OPP fine-tune.
-- **CPU OC to 1608 MHz** — adds a 1608 MHz OPP via DTB patch. The teacupx kernel shipped with dArkOSRE already supports this clock rate; the stock DTB suppresses it.
+- **CPU OC to 1608 MHz** — adds a 1608 MHz OPP via DTB patch and sets `rockchip,avs-scale=0`. The dArkOSRE kernel clock driver already includes 1608 MHz; the stock DTB removes it at boot via `avs-scale=4`. No kernel recompile needed.
 - **GPU OC to 600 MHz** — adds 600 MHz OPP via DTB patch.
 - **RAM OC to 928 MHz** — adds 928 MHz OPP via DTB patch. ATF delivers 924 MHz (nearest PLL divisor).
 - **DTB safety net** — early-boot systemd service detects if the previous boot hung after a DTB patch and restores the original backup before userspace starts.
