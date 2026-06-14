@@ -360,14 +360,14 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_BENCHMARK_GPU_TITLE] = { "GPU Benchmark", "Benchmark GPU" },
     [STR_BENCHMARK_GPU_NOT_INSTALLED] = { "glmark2 legacy not found.", "glmark2 legacy no encontrado." },
     [STR_BENCHMARK_GPU_INSTALL] = { "Install glmark2 legacy?", "Instalar glmark2 legacy?" },
-    [STR_BENCHMARK_GPU_INSTALLING] = { "Preparing glmark2 legacy...", "Preparando glmark2 legacy..." },
-    [STR_BENCHMARK_GPU_RUNNING] = { "Running glmark2 on-screen...", "Ejecutando glmark2 en pantalla..." },
-    [STR_BENCHMARK_GPU_PENDING] = { "Result shown on next launch.", "El resultado aparece al volver a abrir." },
+    [STR_BENCHMARK_GPU_INSTALLING] = { "Preparing glmark2...", "Preparando glmark2..." },
+    [STR_BENCHMARK_GPU_RUNNING] = { "Running glmark2 off-screen...", "Ejecutando glmark2 off-screen..." },
+    [STR_BENCHMARK_GPU_PENDING] = { "Benchmark running in background (~1 min).", "Benchmark corriendo en segundo plano (~1 min)." },
     [STR_BENCHMARK_GPU_RESULT] = { "GPU Result", "Resultado GPU" },
     [STR_BENCHMARK_GPU_PTS] = { "pts", "pts" },
     [STR_BENCHMARK_GPU_FAILED] = { "GPU benchmark failed.", "Benchmark GPU fallido." },
-    [STR_BENCHMARK_GPU_BLACK_SCREEN] = { "3D scenes visible ~1 min on screen. Continue?", "Escenas 3D visibles ~1 min en pantalla. Continuar?" },
-    [STR_BENCHMARK_GPU_REOPEN] = { "Reopen R36 Tuner Next to see the result.", "Vuelve a abrir R36 Tuner Next para ver el resultado." },
+    [STR_BENCHMARK_GPU_BLACK_SCREEN] = { "Runs off-screen in background (~1 min). Continue?", "Corre off-screen en segundo plano (~1 min). Continuar?" },
+    [STR_BENCHMARK_GPU_REOPEN] = { "Come back here to see the result.", "Vuelve aqui para ver el resultado." },
     [STR_BENCHMARK_HISTORY_TITLE] = { "Score History", "Historial de puntuaciones" },
     [STR_BENCHMARK_HISTORY_EMPTY] = { "No scores recorded yet.", "Aun no hay puntuaciones." },
     [STR_BENCHMARK_HISTORY_CLEAR] = { "Clear History", "Borrar historial" },
@@ -994,11 +994,13 @@ static void dtb_setup_safety(void) {
         "BOOTING=/boot/.r36_dtb_patch_booting\n"
         "PENDING=/boot/.r36_dtb_patch_pending\n"
         "if [ -f \"$BOOTING\" ]; then\n"
-        "  rm -f \"$BOOTING\"\n"
-        "  [ -f \"${DTB}.bak\" ] && cp \"${DTB}.bak\" \"$DTB\" && sync\n"
+        "  rm -f \"$BOOTING\" \"$PENDING\"\n"
+        "  sync\n"
         "  exit 0\n"
         "fi\n"
-        "[ -f \"$PENDING\" ] && mv \"$PENDING\" \"$BOOTING\" && sync\n"
+        "if [ -f \"$PENDING\" ]; then\n"
+        "  mv \"$PENDING\" \"$BOOTING\" && sync\n"
+        "fi\n"
         "exit 0\n"
         "SAFEEOF\n"
         "chmod +x /usr/local/bin/r36-dtb-safety.sh\n"
@@ -2536,9 +2538,11 @@ static int screen_ram_benchmark_result(RamBenchState *st) {
         snprintf(tstr, sizeof(tstr), "%s: %dC -> %dC -> %dC peak",
                  S(STR_BENCHMARK_CPU_TEMP), st->temp_min, t_avg, st->temp_max);
         txt(fnt_sm, tstr, panel_x + panel_w/2 - txtw(fnt_sm, tstr)/2, cy, 150, 160, 190);
+        cy += 20;
 
-        /* Buttons */
+        /* Buttons — never overlap text */
         int btn_y = panel_y + panel_h - BTN_H - 18;
+        if (btn_y < cy + 4) btn_y = cy + 4;
         int txty = btn_y + BTN_H/2 - 10;
         const char *btn1 = S(STR_BENCHMARK_CPU_RUN_AGAIN);
         const char *btn2 = S(STR_BENCHMARK_CPU_BACK);
@@ -2575,7 +2579,7 @@ static void screen_ram_benchmark(void) {
         RamBenchState st = {0};
         st.temp_min = 999;
         st.gcc_ok = 1;
-        st.ram_mhz = read_int(DMC_DEVFREQ "/cur_freq") / 1000000;
+        st.ram_mhz = read_int(DMC_DEVFREQ "/max_freq") / 1000000;
 
         SDL_Thread *thread = SDL_CreateThread(ram_bench_thread, "rambench", &st);
         if (!thread) {
@@ -2895,26 +2899,6 @@ static void create_gpu_runner(void) {
         "GPU_FREQ=/sys/class/devfreq/ff400000.gpu/cur_freq\n"
         "get_temp() { awk '{printf \"%%.0f\\n\",$1/1000}' \"$THERMAL\" 2>/dev/null; }\n"
         "get_gpu_mhz() { awk '{printf \"%%d\\n\",$1/1000000}' \"$GPU_FREQ\" 2>/dev/null; }\n"
-        "# Wait for tuner_ui to exit and release DRM master (kernel 4.4 does not\n"
-        "# drop master until the process actually exits).\n"
-        "for i in $(seq 1 80); do\n"
-        "  pgrep -x tuner_ui >/dev/null 2>&1 || break\n"
-        "  sleep 0.25\n"
-        "done\n"
-        "sleep 1\n"
-        "systemctl stop emulationstation 2>/dev/null\n"
-        "# KillMode=process only kills the bash wrapper; the actual emulationstation\n"
-        "# child holds DRM master and survives. Kill the entire cgroup.\n"
-        "systemctl kill --kill-who=all -s KILL emulationstation 2>/dev/null\n"
-        "# Wait until every emulationstation process is gone.\n"
-        "for i in $(seq 1 40); do\n"
-        "  pgrep -f emulationstation >/dev/null 2>&1 || break\n"
-        "  sleep 0.25\n"
-        "done\n"
-        "sleep 1\n"
-        "TERM=linux clear > /dev/tty1 2>/dev/null || true\n"
-        "chvt 1 2>/dev/null || true\n"
-        "sleep 1\n"
         "# Pin GPU to configured max_freq so devfreq governor cannot scale down.\n"
         "GPU_DEV=/sys/class/devfreq/ff400000.gpu\n"
         "GPU_MAX=$(cat \"$GPU_DEV/max_freq\" 2>/dev/null || echo 0)\n"
@@ -2929,17 +2913,14 @@ static void create_gpu_runner(void) {
         "    sleep 2\n"
         "done ) &\n"
         "SAMPLER_PID=$!\n"
-        "# Run on-screen with the legacy binary (legacy KMS via drmModeSetCrtc).\n"
-        "/usr/local/bin/glmark2-es2-drm-legacy --data-path /usr/local/share/glmark2data "
-        "--size 320x240 --annotate "
+        "# Run off-screen — no DRM master needed, ES keeps running.\n"
+        "glmark2-es2-drm --off-screen --data-path /usr/share/glmark2 "
+        "--size 320x240 "
         "-b build:duration=15 -b texture:duration=15 "
         "-b shading:duration=15 -b terrain:duration=15 > \"$GL_LOG\" 2>&1\n"
         "kill \"$SAMPLER_PID\" 2>/dev/null\n"
         "# Restore GPU min_freq.\n"
         "echo \"$GPU_MIN_ORIG\" > \"$GPU_DEV/min_freq\" 2>/dev/null || true\n"
-        "# Reset display state so ES renders cleanly after glmark2 exits.\n"
-        "TERM=linux clear > /dev/tty1 2>/dev/null || true\n"
-        "sleep 1\n"
         "TEMP_MAX=$(sort -n \"$TEMP_LOG\" 2>/dev/null | tail -1)\n"
         "TEMP_AVG=$(awk '{s+=$1;n++} END{if(n>0)printf \"%%.0f\",s/n}' \"$TEMP_LOG\" 2>/dev/null)\n"
         "GPU_MHZ=$(sort -n \"$GPU_MHZ_LOG\" 2>/dev/null | tail -1)\n"
@@ -2955,19 +2936,18 @@ static void create_gpu_runner(void) {
         "  echo \"FAIL $ERR\" > \"$RESULT\"\n"
         "fi\n"
         "chown ark \"$RESULT\" 2>/dev/null\n"
+        "chown ark %s 2>/dev/null\n"
         "rm -f \"$TEMP_LOG\" \"$GPU_MHZ_LOG\"\n"
         "systemctl is-active --quiet emulationstation || systemctl start emulationstation 2>/dev/null\n",
-        GPU_BENCH_LOG, GPU_BENCH_RESULT, UI_SCORES_FILE);
+        GPU_BENCH_LOG, GPU_BENCH_RESULT, UI_SCORES_FILE, UI_SCORES_FILE);
     fclose(f);
     chmod("/tmp/r36_gpu_bench_runner.sh", 0755);
 }
 
 static void screen_gpu_benchmark(void) {
-    const char *legacy_bin = "/usr/local/bin/glmark2-es2-drm-legacy";
-    const char *data_dir   = "/usr/local/share/glmark2data/shaders";
-    if (access(legacy_bin, X_OK) != 0 || access(data_dir, F_OK) != 0) {
+    if (access("/usr/bin/glmark2-es2-drm", X_OK) != 0) {
         show_info(S(STR_BENCHMARK_GPU_TITLE),
-                  "glmark2 legacy not found.\nRedeploy:\npython tools/deployment/deploy_ui.py");
+                  "glmark2 not found.\nInstall: apt install glmark2-es2-drm");
         SDL_Delay(4000);
         return;
     }
@@ -2984,8 +2964,8 @@ static void screen_gpu_benchmark(void) {
     create_gpu_runner();
 
     /* Write service file to /tmp (avoids heredoc quoting issues), then install
-       and start it via sudo.  The service waits for tuner_ui to exit before
-       taking DRM master, so we can exit cleanly without a conflict. */
+       and start it via sudo.  Off-screen mode: no DRM master needed, tuner_ui
+       stays alive and ES keeps running. */
     FILE *sf = fopen("/tmp/r36-gpu-bench.service", "w");
     if (sf) {
         fprintf(sf,
@@ -3000,24 +2980,69 @@ static void screen_gpu_benchmark(void) {
            "cp /tmp/r36-gpu-bench.service /etc/systemd/system/ && "
            "systemctl daemon-reload && systemctl start r36-gpu-bench'");
 
-    /* Inform the user, then exit so the service can take DRM/KMS freely. */
-    draw_bg();
-    draw_header(S(STR_BENCHMARK_GPU_TITLE), NULL);
-    txt(fnt_med, S(STR_BENCHMARK_GPU_RUNNING), 40, 130, 200, 210, 240);
-    txt(fnt_sm, S(STR_BENCHMARK_GPU_PENDING), 40, 180, 150, 160, 190);
-    txt(fnt_sm, S(STR_BENCHMARK_GPU_REOPEN), 40, 210, 120, 130, 160);
-    draw_footer("[A] Continue");
-    SDL_RenderPresent(ren);
+    /* Poll the GL log for completed scenes, show live progress. */
+    static const char *SCENE_NAMES[4] = {"build","texture","shading","terrain"};
+    static const char SPINNER[4] = {'|','/','-','\\'};
+    Uint32 bench_start = SDL_GetTicks();
+    int spin_i = 0;
 
-    Uint32 info_start = SDL_GetTicks();
     while (running) {
-        Keys k = poll_keys();
-        if (k.a || k.b || k.sel) break;
-        if (SDL_GetTicks() - info_start > 4000) break;
-        SDL_Delay(16);
-    }
+        /* Done? show result and return. */
+        if (access(GPU_BENCH_RESULT, F_OK) == 0) {
+            check_gpu_bench_pending();
+            return;
+        }
 
-    running = 0;
+        /* Count completed scenes from log (each done scene has "FPS:" on its line). */
+        int done = 0;
+        FILE *gl = fopen(GPU_BENCH_LOG, "r");
+        if (gl) {
+            char buf[256];
+            while (fgets(buf, sizeof(buf), gl))
+                if (strstr(buf, "FPS:")) done++;
+            fclose(gl);
+        }
+
+        int elapsed_s = (int)((SDL_GetTicks() - bench_start) / 1000);
+        draw_bg();
+        draw_header(S(STR_BENCHMARK_GPU_TITLE), NULL);
+
+        char status[64];
+        if (done < 4)
+            snprintf(status, sizeof(status), "%c  Scene %d/4: %s",
+                     SPINNER[spin_i & 3], done + 1, SCENE_NAMES[done]);
+        else
+            snprintf(status, sizeof(status), "%c  Scoring...", SPINNER[spin_i & 3]);
+        txt(fnt_med, status, 40, 100, 200, 210, 240);
+
+        /* Progress bar */
+        int bar_x = 40, bar_y = 148, bar_w = W - 80, bar_h = 8;
+        SDL_SetRenderDrawColor(ren, 45, 50, 65, 255);
+        SDL_Rect bg_bar = {bar_x, bar_y, bar_w, bar_h};
+        SDL_RenderFillRect(ren, &bg_bar);
+        int fill = bar_w * done / 4;
+        if (fill > 0) {
+            SDL_SetRenderDrawColor(ren, 80, 160, 220, 255);
+            SDL_Rect fg_bar = {bar_x, bar_y, fill, bar_h};
+            SDL_RenderFillRect(ren, &fg_bar);
+        }
+
+        char time_str[32];
+        snprintf(time_str, sizeof(time_str), "%d:%02d", elapsed_s / 60, elapsed_s % 60);
+        txt(fnt_sm, time_str, 40, 168, 120, 130, 155);
+
+        draw_footer("[B] Cancel");
+        SDL_RenderPresent(ren);
+
+        Keys k = poll_keys();
+        if (k.b) {
+            system("pkill -x glmark2-es2-drm 2>/dev/null");
+            system("echo ark | sudo -S systemctl stop r36-gpu-bench 2>/dev/null");
+            break;
+        }
+        spin_i++;
+        SDL_Delay(500);
+    }
 }
 
 static void check_gpu_bench_pending(void) {
