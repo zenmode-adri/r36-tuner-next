@@ -86,15 +86,18 @@ The tuner auto-detects your chip bin from `dmesg` (`pvtm-volt-sel`) and patches 
 
 GPU and RAM share the `vdd_logic` rail. The PMIC always sets it to the highest voltage demanded by either consumer. To lower the effective rail both must be undervolted below the target.
 
-### glmark2 off-screen results (320×240, L2 bin, thermal pad + fan)
+### glmark2 off-screen results
 
-Measured on device (2026-06-14). Stock run vs best of three OC runs at 600 MHz. Unit has thermal pad + active fan — stock-cooled units will run hotter. Note: applying CPU/GPU undervolt via the tuner offsets the extra heat from OC; peak temperatures stay close to stock.
+> Platform: 320×240, L2 bin — measured 2026-06-14. Best of three OC runs.
 
-| Config | Score | GPU MHz | Temp peak |
-|--------|-------|---------|-----------|
+| Config | Score | GPU MHz | Peak temp |
+|--------|------:|--------:|----------:|
 | Stock | 560 pts | 520 MHz | 51 °C |
-| GPU OC | 620 pts | 600 MHz | 51 °C |
-| **Delta** | **+10.7%** | | |
+| GPU OC (600 MHz) | **620 pts** | **600 MHz** | 51 °C |
+| Delta | **+10.7%** | | = |
+
+> **Cooling note:** test unit has thermal pad + active fan. Stock-cooled units will run hotter.
+> Applying GPU undervolt via the tuner offsets the extra heat from OC — peak temps stay close to stock.
 
 ---
 
