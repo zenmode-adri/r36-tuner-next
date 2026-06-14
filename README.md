@@ -88,7 +88,7 @@ GPU and RAM share the `vdd_logic` rail. The PMIC always sets it to the highest v
 
 ### glmark2 off-screen results (320×240, L2 bin, no thermal pad)
 
-Measured on device (2026-06-14). Stock run vs best of three OC runs at 600 MHz.
+Measured on device (2026-06-14). Stock run vs best of three OC runs at 600 MHz. Unit has thermal pad + active fan — temperatures will be higher on stock cooling.
 
 | Config | Score | GPU MHz | Temp peak |
 |--------|-------|---------|-----------|
