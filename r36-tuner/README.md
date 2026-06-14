@@ -134,7 +134,7 @@ Measured on the same unit (L2 bin), **without thermal pad**. glmark2-es2-drm 202
 
 | Configuration | GPU | CPU | DMC | vdd_arm | vdd_logic |
 |---|---|---|---|---|---|
-| **Stock** | 520 MHz | stock | 786 MHz | ~1200 mV | ~1100 mV |
+| **Stock** | 520 MHz | stock | 786 MHz | ~1300 mV | ~1100 mV |
 | **GPU + RAM OC + UV** | 600 MHz | stock | 924 MHz | UV only | 1025 mV |
 
 | Scene | Stock | OC+UV | Delta |
