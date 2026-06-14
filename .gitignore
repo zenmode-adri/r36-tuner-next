@@ -35,3 +35,7 @@ packages/*.deb
 # --- Session / temp files ---
 SESSION_RESUME.md
 *.tmp
+
+# --- Internal dev docs ---
+AGENTS.md
+.claude/
