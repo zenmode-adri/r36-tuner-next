@@ -16,7 +16,8 @@ Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](ht
 - RAM / DMC max frequency selection
 
 ### DTB Tuning (permanent, reboot required)
-- **CPU undervolt** — patches `vdd_arm` OPP table. Auto-detects chip bin (L0–L3) and patches the correct voltage property. Uniform offset or per-frequency fine-tune.
+- **CPU undervolt** — patches `vdd_arm` OPP table. Auto-detects chip bin (L0–L3) and patches the correct voltage property. Uniform offset across all OPPs.
+- **CPU fine-tune** — per-OPP voltage adjustment: select a specific frequency step (1008 / 1200 / 1248 / 1296 / 1512 MHz) and set its voltage independently. Pairs with undervolt for precise per-frequency floors.
 - **CPU OC** — requires [teacupx kernel](https://github.com/teacupx/overclock-r36s) (installed separately). Once active, the tuner lets you adjust CPU voltages to find a stable floor. Max real freq with teacupx: 1512 MHz.
 - **GPU OC 600 MHz** — adds a 600 MHz OPP node to the Mali-G31 table.
 - **RAM OC 928 MHz** — adds a 928 MHz OPP to the DMC table. ATF delivers 924 MHz (nearest PLL divisor).
