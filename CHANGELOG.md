@@ -7,7 +7,7 @@
 - New **CPU Fine-Tune** screen in DTB Tuning menu: select individual CPU OPP frequencies (1008 / 1200 / 1248 / 1296 / 1512 MHz) and set a specific voltage for each one independently
 - Complements the existing uniform undervolt: use UV for a quick all-OPP offset, Fine-Tune for precise per-frequency floors
 - Voltage picker pre-selected at the current DTB value; step size 12.5 mV, floor 950 mV
-- Patches the bin-specific `opp-microvolt-L2` property (3-tuple) for the selected OPP only; all other OPPs untouched
+- Patches the bin-specific `opp-microvolt-Lx` property (3-tuple) for the selected OPP only; all other OPPs untouched
 - Same backup / safety net / confirm flow as all other DTB patches
 
 ## v1.0 — 2026-06-14
