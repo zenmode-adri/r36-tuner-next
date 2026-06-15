@@ -81,6 +81,7 @@ The tuner auto-detects your chip bin from `dmesg` (`pvtm-volt-sel`) and patches 
 | RAM (vdd_logic) | ~1025 mV @ 786 MHz | 987.5 mV @ 924 MHz |
 
 > Results represent one chip. Silicon lottery applies — always validate stability after each change.
+> Full OPP voltage tables for all bins (L0–L3): [docs/opp-research.md](https://github.com/zenmode-adri/r36-tuner/blob/master/docs/opp-research.md)
 
 ### vdd_logic shared rail
 
@@ -98,6 +99,22 @@ GPU and RAM share the `vdd_logic` rail. The PMIC always sets it to the **highest
 | DMC | 924 MHz | **987.5 mV** |
 
 **Tuning voltage after first apply:** enter the GPU OC / RAM OC menu at any time — the tuner detects the existing OPP node and goes directly to a voltage selector. Select a new voltage, confirm, reboot.
+
+### RAM OC 1032 MHz — [EXPERIMENTAL]
+
+Available in the RAM OC menu once 924 MHz is already active. ATF delivers **1032 MHz** (nearest PLL divisor).
+
+**Hard constraint:** requires **1150 mV** on `vdd_logic` — the PMIC hard limit for this rail. No undervolt margin is possible. If GPU OC is also active (stable floor: 1025 mV), the shared rail gets pinned at 1150 mV, eliminating the GPU UV savings.
+
+Real-world impact measured in PPSSPP (God of War: Ghost of Sparta, L2 bin):
+
+| DMC freq | FPS avg | vs stock 786 MHz |
+|----------|--------:|-----------------:|
+| 786 MHz (stock) | 25.6 | — |
+| 924 MHz | 26.7 | +4% |
+| **1032 MHz** | **28.6** | **+12%** |
+
+RAM dominates PSP emulation performance — CPU and GPU share a UMA bus, and bandwidth is the bottleneck. Full sweep data in [docs/opp-research.md](https://github.com/zenmode-adri/r36-tuner/blob/master/docs/opp-research.md).
 
 ### glmark2 off-screen results
 

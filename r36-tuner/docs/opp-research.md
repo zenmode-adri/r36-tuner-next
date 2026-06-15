@@ -45,7 +45,7 @@ Rail: `vdd_arm` (DCDC_REG2) · DTB node format: `opp-<hz>` · Values: `[min, typ
 | −137.5 mV | 1162.5 mV        | ❌ Freeze at "starting ui"     |
 | −150 mV | 1150 mV            | ❌ Black screen (kernel crash) |
 
-**Confirmed stable limit: −125 mV → 1125 mV** at 1296/1512 MHz.
+**Confirmed stable limit: −125 mV → 1175 mV** at 1296/1512 MHz.
 
 Safety service (`r36-dtb-safety`) catches freeze/hang cases (before=basic.target).  
 If kernel crashes before basic.target → safety service cannot act → manual SD recovery needed.
