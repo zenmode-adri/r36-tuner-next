@@ -202,6 +202,8 @@ typedef enum {
     STR_CPU_OC_STOCK_WARN,
     STR_CPU_OC_NEEDS_KERNEL,
     STR_CPU_OC_KERNEL_MAX,
+    STR_CPU_FINETUNE,
+    STR_CPU_FINETUNE_DESC,
     STR_COUNT
 } StringID;
 
@@ -381,6 +383,8 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_CPU_OC_STOCK_WARN] = { "Stock kernel: 1296 MHz is the real hardware limit.", "Kernel stock: 1296 MHz es el limite real del hardware." },
     [STR_CPU_OC_NEEDS_KERNEL] = { "Real OC above 1296 MHz requires teacupx patched kernel", "OC real sobre 1296 MHz requiere kernel parcheado de teacupx" },
     [STR_CPU_OC_KERNEL_MAX] = { "Patched kernel max: 1512 MHz  (github.com/teacupx/overclock-r36s)", "Max kernel parcheado: 1512 MHz  (github.com/teacupx/overclock-r36s)" },
+    [STR_CPU_FINETUNE]      = { "CPU Fine-Tune", "CPU Fine-Tune" },
+    [STR_CPU_FINETUNE_DESC] = { "Per-OPP voltage adjustment", "Ajuste de voltaje por OPP" },
 };
 
 static int current_lang = LANG_EN;
@@ -1323,6 +1327,107 @@ static int volt_items_build(LItem items[], int min_uv, int max_uv,
 }
 static int volt_from_index(int max_uv, int idx) { return max_uv - idx * 12500; }
 
+/* ── DTB: CPU Fine-Tune (per-OPP voltage) ───────────────────────────────── */
+static void screen_dtb_cpu_finetune(const char *dtb, const char *opp_base,
+                                    const char *bin_prop) {
+    if (strcmp(bin_prop, "opp-microvolt") == 0) {
+        show_info(S(STR_CPU_FINETUNE), S(STR_BIN_NOT_DETECTED));
+        SDL_Delay(2500); return;
+    }
+    show_info(S(STR_CPU_FINETUNE), S(STR_READING_OPP));
+    OPPEntry opp[MAX_OPP]; int n = dtb_scan_opp(dtb, opp_base, bin_prop, opp, MAX_OPP);
+    if (n == 0) {
+        show_info(S(STR_CPU_FINETUNE), S(STR_OPP_NOT_FOUND));
+        SDL_Delay(2000); return;
+    }
+
+    int opp_sel = 0;
+    while (running) {
+        /* build OPP list — refresh voltages from opp[] each loop */
+        LItem opp_items[MAX_OPP];
+        for (int i = 0; i < n; i++) {
+            char mv[16]; fmt_mv(opp[i].volt_uv, mv, sizeof(mv));
+            snprintf(opp_items[i].label, 64, "%lld MHz", opp[i].freq_hz / 1000000LL);
+            snprintf(opp_items[i].desc,  96, "%s %s", mv, S(STR_MILLIVOLTS));
+            opp_items[i].tag[0] = 0;
+        }
+        char hint[128];
+        snprintf(hint, sizeof(hint), "%s  %s", S(STR_DPAD_SELECT), S(STR_A_SELECT_B_BACK));
+        int chosen_opp = submenu(S(STR_CPU_FINETUNE), bin_prop, opp_items, n, &opp_sel, hint, 1);
+        if (chosen_opp < 0) return;
+
+        /* voltage picker for the selected OPP */
+        LItem vitems[VOLT_ITEMS_MAX]; int nvsel = 0;
+        int nv = volt_items_build(vitems, OPP_FLOOR_UV, 1350000, &nvsel, opp[chosen_opp].volt_uv);
+        char freq_sub[64];
+        snprintf(freq_sub, sizeof(freq_sub), "%lld MHz — %s",
+                 opp[chosen_opp].freq_hz / 1000000LL, bin_prop);
+        char volt_hint[128];
+        snprintf(volt_hint, sizeof(volt_hint), "%s  %s", S(STR_DPAD_VOLTAGE), S(STR_A_APPLY_B_BACK));
+        int chosen_v = submenu(S(STR_CPU_FINETUNE), freq_sub, vitems, nv, &nvsel, volt_hint, 1);
+        if (chosen_v < 0) continue;
+
+        int new_uv = volt_from_index(1350000, chosen_v);
+        if (new_uv == opp[chosen_opp].volt_uv) continue;
+
+        /* confirm */
+        char old_mv[16], new_mv[16];
+        fmt_mv(opp[chosen_opp].volt_uv, old_mv, sizeof(old_mv));
+        fmt_mv(new_uv, new_mv, sizeof(new_mv));
+        ConfirmRow rows[3]; int nr = 0;
+        snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_FREQUENCY));
+        snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%lld MHz", opp[chosen_opp].freq_hz / 1000000LL);
+        rows[nr].col3[0] = 0; nr++;
+        snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_ACTUAL_COL));
+        snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", old_mv, S(STR_MILLIVOLTS));
+        rows[nr].col3[0] = 0; nr++;
+        snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_NEW_COL));
+        snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", new_mv, S(STR_MILLIVOLTS));
+        rows[nr].col3[0] = 0; nr++;
+        char title[64]; snprintf(title, sizeof(title), "%s — %s", S(STR_CPU_FINETUNE), S(STR_CONFIRM));
+        if (!confirm_screen(title, NULL, NULL, NULL, NULL, rows, nr,
+                            NULL, 0, NULL, 0, S(STR_APPLY), S(STR_CANCEL)))
+            continue;
+
+        /* backup */
+        char bak[280], cmd[600];
+        snprintf(bak, sizeof(bak), "%s.bak", dtb);
+        if (access(bak, F_OK) != 0) {
+            snprintf(cmd, sizeof(cmd), "echo ark | sudo -S cp '%s' '%s' 2>/dev/null", dtb, bak);
+            if (system(cmd) != 0) { show_info("ERROR", S(STR_BACKUP_FAILED)); SDL_Delay(2000); return; }
+        }
+        show_info(S(STR_CPU_FINETUNE), S(STR_PATCHING_DTB));
+
+        /* patch single OPP — write 3-tuple (min typ max all same) */
+        snprintf(cmd, sizeof(cmd),
+            "echo ark | sudo -S fdtput -t u '%s' '%s' '%s' %d %d %d 2>/dev/null",
+            dtb, opp[chosen_opp].node, bin_prop, new_uv, new_uv, new_uv);
+        int fail = (system(cmd) != 0);
+        if (!fail && strcmp(bin_prop, "opp-microvolt") != 0) {
+            snprintf(cmd, sizeof(cmd),
+                "echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt %d %d %d 2>/dev/null",
+                dtb, opp[chosen_opp].node, new_uv, new_uv, new_uv);
+            system(cmd);
+        }
+
+        if (!fail) {
+            opp[chosen_opp].volt_uv = new_uv; /* update local state */
+            dtb_mark_pending(); dtb_setup_safety();
+            char msg[80];
+            snprintf(msg, sizeof(msg), "%lld MHz @ %s %s",
+                     opp[chosen_opp].freq_hz / 1000000LL, new_mv, S(STR_MILLIVOLTS));
+            if (confirm_reboot(S(STR_DTB_PATCHED), msg)) do_reboot();
+            return;
+        } else {
+            show_info("ERROR", S(STR_PATCH_FAILED_RESTORE));
+            SDL_Delay(1500);
+            snprintf(cmd, sizeof(cmd), "echo ark | sudo -S cp '%s' '%s' 2>/dev/null", bak, dtb);
+            system(cmd);
+            return;
+        }
+    }
+}
+
 /* ── DTB: CPU Undervolt (uniform offset) ────────────────────────────────── */
 static void screen_dtb_cpu_uv(const char *dtb, const char *opp_base,
                                const char *bin_prop) {
@@ -2220,9 +2325,13 @@ static void screen_dtb_main(void) {
             snprintf(bin_tag, sizeof(bin_tag), "%s", S(STR_BIN_MISSING));
         }
 
-        LItem items[7]; int n=0;
+        LItem items[8]; int n=0;
         strncpy(items[n].label,S(STR_CPU_UNDERVOLT),63);
         strncpy(items[n].desc,S(STR_PATCH_OPP_DTDB),95);
+        strncpy(items[n].tag,bin_tag,31); n++;
+
+        strncpy(items[n].label,S(STR_CPU_FINETUNE),63);
+        strncpy(items[n].desc,S(STR_CPU_FINETUNE_DESC),95);
         strncpy(items[n].tag,bin_tag,31); n++;
 
         strncpy(items[n].label,S(STR_CPU_OC_1608),63);
@@ -2263,17 +2372,25 @@ static void screen_dtb_main(void) {
                 break;
             case 1:
                 if (!opp_base[0]) {
+                    show_info(S(STR_CPU_FINETUNE),S(STR_TABLE_NOT_FOUND));
+                    SDL_Delay(2000);
+                } else {
+                    screen_dtb_cpu_finetune(dtb, opp_base, bin_prop);
+                }
+                break;
+            case 2:
+                if (!opp_base[0]) {
                     show_info(S(STR_CPU_OC_1608),S(STR_TABLE_NOT_FOUND));
                     SDL_Delay(2000);
                 } else {
                     screen_dtb_cpu_oc(dtb, opp_base, bin_prop);
                 }
                 break;
-            case 2: screen_dtb_gpu_oc(dtb, bin_prop); break;
-            case 3: screen_dtb_ram_oc(dtb, bin_prop); break;
-            case 4: screen_dtb_diag(dtb, opp_base, bin_prop); break;
-            case 5: screen_dtb_recovery(); break;
-            case 6: screen_dtb_restore(dtb); break;
+            case 3: screen_dtb_gpu_oc(dtb, bin_prop); break;
+            case 4: screen_dtb_ram_oc(dtb, bin_prop); break;
+            case 5: screen_dtb_diag(dtb, opp_base, bin_prop); break;
+            case 6: screen_dtb_recovery(); break;
+            case 7: screen_dtb_restore(dtb); break;
         }
     }
 }
