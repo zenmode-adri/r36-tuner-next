@@ -58,12 +58,9 @@ scp tuner_ui "R36 Tuner Next.sh" ark@<device-ip>:/opt/system/
 ssh ark@<device-ip> "chmod +x /opt/system/tuner_ui '/opt/system/R36 Tuner Next.sh'"
 ```
 
-**Option B — SD card + 351Files (no network needed)**
+**Option B — SD card + file manager (no network needed)**
 
-Copy both files to the **FAT32 partition** of the SD card (visible on any PC). Insert the card, boot the device, open a file manager (e.g. **351Files**) and move both files to `/opt/system/`. Then open a terminal and run:
-```bash
-chmod +x /opt/system/tuner_ui '/opt/system/R36 Tuner Next.sh'
-```
+Copy both files to the **FAT32 partition** of the SD card (visible on any PC). Insert the card, boot the device, open a file manager (e.g. **351Files**) and move both files to `/opt/system/`. They will appear in the dArkOSRE system menu.
 
 **First launch:** the launcher extracts bundled tools (`fdtget`, `fdtput`, benchmarks, glmark2) to `/usr/local/bin/` — takes ~30 seconds, one time only. Subsequent launches are instant.
 
