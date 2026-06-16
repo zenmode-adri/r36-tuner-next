@@ -60,7 +60,7 @@ ssh ark@<device-ip> "chmod +x /opt/system/tuner_ui '/opt/system/R36 Tuner Next.s
 
 **Option B — SD card + 351Files (no network needed)**
 
-Copy both files to the **FAT32 partition** of the SD card (visible on any PC). Insert the card, boot the device, open **351Files** and move both files to `/opt/system/`. Then open a terminal and run:
+Copy both files to the **FAT32 partition** of the SD card (visible on any PC). Insert the card, boot the device, open a file manager (e.g. **351Files**) and move both files to `/opt/system/`. Then open a terminal and run:
 ```bash
 chmod +x /opt/system/tuner_ui '/opt/system/R36 Tuner Next.sh'
 ```
