@@ -2,6 +2,12 @@
 
 ## v1.1 — 2026-06-15
 
+### Self-contained launcher (no WiFi / no apt needed)
+
+- `R36 Tuner Next.sh` is now a self-extracting archive (~10 MB): `fdtget`, `fdtput`, `r36_cpubench`, `r36_rambench`, `glmark2-es2-drm-legacy` and glmark2 data are all embedded as base64 payloads
+- On first launch, tools are extracted to `/usr/local/bin/` and `/usr/local/share/glmark2data/`. A stamp file prevents re-extraction on subsequent launches
+- Users need no internet connection, no `apt`, no `gcc` — drag `tuner_ui` + `R36 Tuner Next.sh` to the SD card and launch
+
 ### CPU Fine-Tune
 
 - New **CPU Fine-Tune** screen in DTB Tuning menu: select individual CPU OPP frequencies (1008 / 1200 / 1248 / 1296 / 1512 MHz) and set a specific voltage for each one independently
