@@ -3,6 +3,7 @@
 
 import base64
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -100,6 +101,41 @@ def compile_remote(r36):
     sftp.get(f"{REMOTE_TMP}/tuner_ui", LOCAL_BIN)
     sftp.close()
     log(f"remote compiled binary pulled: {LOCAL_BIN}")
+
+
+def embed_tuner_ui(binary_path, launcher_path):
+    """Embed tuner_ui binary as base64 between __TUNER_UI_START__ and __TUNER_UI_END__ markers."""
+    with open(binary_path, "rb") as f:
+        raw = f.read()
+    b64 = base64.b64encode(raw).decode("ascii")
+    b64_lines = [b64[i:i+76] for i in range(0, len(b64), 76)]
+
+    with open(launcher_path, "r", encoding="utf-8", errors="replace") as f:
+        lines = f.read().splitlines()
+
+    out = []
+    skip = False
+    found = False
+    for line in lines:
+        stripped = line.rstrip("\r")
+        if stripped == "# __TUNER_UI_START__":
+            out.append("# __TUNER_UI_START__")
+            out.extend(b64_lines)
+            skip = True
+            found = True
+        elif stripped == "# __TUNER_UI_END__":
+            out.append("# __TUNER_UI_END__")
+            skip = False
+        elif not skip:
+            out.append(line)
+
+    if not found:
+        log("WARNING: __TUNER_UI_START__ marker not found in launcher — binary NOT embedded")
+        return
+
+    with open(launcher_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(out) + "\n")
+    log(f"embedded tuner_ui ({len(raw):,} bytes -> {len(b64) :,} b64 chars) into launcher")
 
 
 def verify(r36, path):
@@ -209,6 +245,8 @@ def main():
     with connect() as r36:
         if not compile_local():
             compile_remote(r36)
+
+        embed_tuner_ui(LOCAL_BIN, LAUNCHER_SRC)
 
         stop_ui(r36)
 
