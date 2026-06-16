@@ -6,6 +6,9 @@
 
 Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](https://github.com/southoz/dArkOSRE-R36). Native SDL2 UI — no terminal, no dialog boxes. Runs directly from the dArkOSRE system menu.
 
+> [!IMPORTANT]
+> **USE AT YOUR OWN RISK.** This tool patches the Device Tree Binary and modifies CPU, GPU, and RAM voltages. The authors take **no responsibility** for bricked devices, corrupted SD cards, or data loss. Always start conservative and verify stability before going further.
+
 ---
 
 ## Features
@@ -138,8 +141,7 @@ If a DTB patch causes a hard boot failure:
 
 ## Disclaimer
 
-> [!WARNING]
-> **USE AT YOUR OWN RISK.** This tool patches the Device Tree Binary and modifies CPU, GPU, and RAM voltages. The authors take **no responsibility** for bricked devices, corrupted SD cards, or data loss. Always start conservative and verify stability before going further.
+> **USE AT YOUR OWN RISK.** This tool patches the Device Tree Binary and modifies CPU, GPU, and RAM voltages. The authors take no responsibility for bricked devices, corrupted SD cards, or data loss.
 
 ---
 
