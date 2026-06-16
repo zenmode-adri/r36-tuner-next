@@ -50,24 +50,20 @@ Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](ht
 
 ## Installation
 
-Download **`tuner_ui`** and **`R36 Tuner Next.sh`** from the [latest release](https://github.com/zenmode-adri/r36-tuner-next/releases/latest). Copy both files to `/opt/system/` on the device — pick whichever method is easiest:
+Download **`tuner_ui`** and **`R36 Tuner Next.sh`** from the [latest release](https://github.com/zenmode-adri/r36-tuner-next/releases/latest). Copy both files to `/opt/system/` on the device.
 
-**Option A — Network share (drag and drop)**
-
-Open `\\<device-ip>` in Windows Explorer. Navigate to the `system` folder and drop both files in. Then set the execute bit from the device terminal or via SSH:
-```bash
-chmod +x /opt/system/tuner_ui '/opt/system/R36 Tuner Next.sh'
-```
-
-**Option B — SSH / SCP**
+**Option A — SSH (recommended)**
 ```bash
 scp tuner_ui "R36 Tuner Next.sh" ark@<device-ip>:/opt/system/
 ssh ark@<device-ip> "chmod +x /opt/system/tuner_ui '/opt/system/R36 Tuner Next.sh'"
 ```
 
-**Option C — SD card (no network)**
+**Option B — SD card + 351Files (no network needed)**
 
-Power off the device, remove the SD card and open the **ext4 partition** on a PC ([DiskGenius](https://www.diskgenius.com/) on Windows). Copy both files to `/opt/system/`. Eject, reinsert, boot.
+Copy both files to the **FAT32 partition** of the SD card (visible on any PC). Insert the card, boot the device, open **351Files** and move both files to `/opt/system/`. Then open a terminal and run:
+```bash
+chmod +x /opt/system/tuner_ui '/opt/system/R36 Tuner Next.sh'
+```
 
 **First launch:** the launcher extracts bundled tools (`fdtget`, `fdtput`, benchmarks, glmark2) to `/usr/local/bin/` — takes ~30 seconds, one time only. Subsequent launches are instant.
 
