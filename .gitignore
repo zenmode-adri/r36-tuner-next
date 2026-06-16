@@ -28,14 +28,22 @@ logs/*.log
 
 # --- OS images / firmware blobs ---
 firmware/os-images/
+firmware/kernels/
+firmware/dtb/
 
 # --- Debian packages ---
 packages/*.deb
+packages/glmark2/deb/*.deb
+
+# --- Compiled / deployed binaries ---
+bin/glmark2-es2-drm-legacy
 
 # --- Session / temp files ---
 SESSION_RESUME.md
 *.tmp
 
-# --- Internal dev docs ---
+# --- Internal dev docs and scripts ---
 AGENTS.md
 .claude/
+r36-tuner/docs/session-*.md
+tools/release/create_release*.py
