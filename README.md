@@ -70,23 +70,22 @@ CPU overclocking above 1296 MHz is made possible by [teacupx/overclock-r36s](htt
 
 - **Device:** R36S or compatible RK3326 / RK3326S clone
 - **OS:** [dArkOSRE-R36](https://github.com/southoz/dArkOSRE-R36) by southoz
-- **Dependencies:** none — everything is bundled in the launcher
+- **Install:** one file — `R36.Tuner.Next.sh` bundles everything
 
 ---
 
 ## Installation
 
-Download **`tuner_ui`** and **`R36 Tuner Next.sh`** from the [latest release](https://github.com/zenmode-adri/r36-tuner-next/releases/latest). Copy both files to `/opt/system/` on the device.
+Download **`R36.Tuner.Next.sh`** from the [latest release](https://github.com/zenmode-adri/r36-tuner-next/releases/latest). Copy it to `/opt/system/` on the device.
 
 **Option A — SSH (recommended)**
 ```bash
-scp tuner_ui "R36 Tuner Next.sh" ark@<device-ip>:/opt/system/
-ssh ark@<device-ip> "chmod +x /opt/system/tuner_ui '/opt/system/R36 Tuner Next.sh'"
+scp "R36.Tuner.Next.sh" ark@<device-ip>:/opt/system/
 ```
 
 **Option B — SD card + file manager (no network needed)**
 
-Copy both files to the **FAT32 partition** of the SD card (visible on any PC). Insert the card, boot the device, open a file manager (e.g. **351Files**) and move both files to `/opt/system/`. They will appear in the dArkOSRE system menu.
+Copy the file to the **FAT32 partition** of the SD card (visible on any PC). Insert the card, boot the device, open a file manager (e.g. **351Files**) and move it to `/opt/system/`. It will appear in the dArkOSRE system menu.
 
 **First launch:** extracts bundled tools (`fdtget`, `fdtput`, benchmarks, glmark2) — takes ~30 seconds, one time only.
 
