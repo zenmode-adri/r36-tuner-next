@@ -1016,6 +1016,7 @@ static void dtb_setup_safety(void) {
         "BOOTING=/boot/.r36_dtb_patch_booting\n"
         "PENDING=/boot/.r36_dtb_patch_pending\n"
         "if [ -f \"$BOOTING\" ]; then\n"
+        "  [ -f \"$DTB.bak\" ] && cp \"$DTB.bak\" \"$DTB\"\n"
         "  rm -f \"$BOOTING\" \"$PENDING\"\n"
         "  sync\n"
         "  exit 0\n"
