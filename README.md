@@ -44,24 +44,32 @@ Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](ht
 
 - **Device:** R36S or compatible RK3326 / RK3326S clone
 - **OS:** [dArkOSRE-R36](https://github.com/southoz/dArkOSRE-R36) by southoz
-- **Dependencies in dArkOSRE:** `SDL2`, `SDL2_ttf`, `systemd`, `device-tree-compiler` (`fdtget` / `fdtput`)
-- **GPU benchmark:** `glmark2-es2-drm` (`apt install glmark2-es2-drm`)
+- **Dependencies:** none — everything is bundled in the launcher (`SDL2` and `SDL2_ttf` come with dArkOSRE)
 
 ---
 
 ## Installation
 
+Download **`tuner_ui`** and **`R36 Tuner Next.sh`** from the [latest release](https://github.com/zenmode-adri/r36-tuner-next/releases/latest). Copy both files to `/opt/system/` on the device — pick whichever method is easiest:
+
+**Option A — Network share (drag and drop)**
+
+Open `\\<device-ip>` in Windows Explorer. Navigate to the `system` folder and drop both files in. Then set the execute bit from the device terminal or via SSH:
 ```bash
-scp "R36 Tuner Next.sh" ark@<device-ip>:/opt/system/
-scp tuner_ui ark@<device-ip>:/opt/system/
-ssh ark@<device-ip> "chmod +x '/opt/system/R36 Tuner Next.sh' /opt/system/tuner_ui"
+chmod +x /opt/system/tuner_ui '/opt/system/R36 Tuner Next.sh'
 ```
 
-Or use the deployment script (requires Python + paramiko on host):
-
+**Option B — SSH / SCP**
 ```bash
-python tools/deployment/deploy_ui.py
+scp tuner_ui "R36 Tuner Next.sh" ark@<device-ip>:/opt/system/
+ssh ark@<device-ip> "chmod +x /opt/system/tuner_ui '/opt/system/R36 Tuner Next.sh'"
 ```
+
+**Option C — SD card (no network)**
+
+Power off the device, remove the SD card and open the **ext4 partition** on a PC ([DiskGenius](https://www.diskgenius.com/) on Windows). Copy both files to `/opt/system/`. Eject, reinsert, boot.
+
+**First launch:** the launcher extracts bundled tools (`fdtget`, `fdtput`, benchmarks, glmark2) to `/usr/local/bin/` — takes ~30 seconds, one time only. Subsequent launches are instant.
 
 Then launch **R36 Tuner Next** from the dArkOSRE system menu.
 
