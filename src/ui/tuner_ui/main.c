@@ -3156,7 +3156,8 @@ static void create_gpu_runner(void) {
         "chown ark \"$RESULT\" 2>/dev/null\n"
         "chown ark %s 2>/dev/null\n"
         "rm -f \"$TEMP_LOG\" \"$GPU_MHZ_LOG\"\n"
-        "systemctl is-active --quiet emulationstation || systemctl start emulationstation 2>/dev/null\n",
+        "pgrep -f /opt/system/tuner_ui > /dev/null 2>&1 || "
+        "(systemctl is-active --quiet emulationstation || systemctl start emulationstation 2>/dev/null)\n",
         GPU_BENCH_LOG, GPU_BENCH_RESULT, UI_SCORES_FILE, UI_SCORES_FILE);
     fclose(f);
     chmod("/tmp/r36_gpu_bench_runner.sh", 0755);
