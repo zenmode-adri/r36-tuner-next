@@ -38,6 +38,10 @@ Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](ht
 - Confirmation screens before every DTB patch
 - Detects if CPU frequencies above 1296 MHz are real (teacupx) or software-only (stock kernel)
 
+### CPU OC + teacupx
+
+CPU overclocking above 1296 MHz is made possible by [teacupx/overclock-r36s](https://github.com/teacupx/overclock-r36s) — a patched kernel that removes the RK3326 binning restriction and adds OPPs up to 1512 MHz. Install it first, then use R36 Tuner Next to fine-tune voltages at each unlocked frequency step and find your chip's stable floor.
+
 ---
 
 ## Requirements
@@ -120,8 +124,6 @@ If a DTB patch causes a hard boot failure:
 ## Credits
 
 Built for [dArkOSRE-R36](https://github.com/southoz/dArkOSRE-R36) by [southoz](https://github.com/southoz).
-
-CPU overclocking above 1296 MHz is made possible by [teacupx/overclock-r36s](https://github.com/teacupx/overclock-r36s) — a patched kernel that removes the RK3326 binning restriction and adds OPPs up to 1512 MHz. R36 Tuner Next detects teacupx automatically and lets you fine-tune voltages at each unlocked frequency step to find your chip's stable floor.
 
 ## License
 
