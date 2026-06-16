@@ -9,6 +9,15 @@
 - Voltage picker pre-selected at the current DTB value; step size 12.5 mV, floor 950 mV
 - Patches the bin-specific `opp-microvolt-Lx` property (3-tuple) for the selected OPP only; all other OPPs untouched
 - Same backup / safety net / confirm flow as all other DTB patches
+- Fixed: OPP list was shown lowest-first; now shows highest frequency first (1512 MHz at top)
+
+### RAM OC 1032 MHz [EXPERIMENTAL]
+
+- New option in the RAM OC menu once 928 MHz is already active: apply a second OPP node at 1040 MHz (ATF delivers **1032 MHz**, nearest PLL divisor)
+- Requires **1150 mV** on `vdd_logic` — the PMIC hard ceiling for this rail; no undervolt margin is possible at this frequency
+- Voltage picker available: user can choose any value from floor to 1150 mV at their own risk (hardware cannot be damaged — `vdd_logic` is the SoC DMC controller supply, not the RAM chip supply)
+- Remove options: remove only the 1032 MHz node, or remove all RAM OC (restores stock 786 MHz)
+- Measured PPSSPP improvement vs stock 786 MHz: +12% FPS average (God of War: Ghost of Sparta, L2 bin)
 
 ## v1.0 — 2026-06-14
 

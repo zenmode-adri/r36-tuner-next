@@ -204,6 +204,14 @@ typedef enum {
     STR_CPU_OC_KERNEL_MAX,
     STR_CPU_FINETUNE,
     STR_CPU_FINETUNE_DESC,
+    STR_RAM_OC_1032,
+    STR_RAM_OC_1032_DESC,
+    STR_RAM_OC_1032_WARN1,
+    STR_RAM_OC_1032_WARN2,
+    STR_RAM_OC_1032_REMOVE,
+    STR_RAM_OC_REMOVE,
+    STR_RAM_OC_REMOVE_DESC,
+    STR_TUNE_924_VOLT,
     STR_COUNT
 } StringID;
 
@@ -383,8 +391,16 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_CPU_OC_STOCK_WARN] = { "Stock kernel: 1296 MHz is the real hardware limit.", "Kernel stock: 1296 MHz es el limite real del hardware." },
     [STR_CPU_OC_NEEDS_KERNEL] = { "Real OC above 1296 MHz requires teacupx patched kernel", "OC real sobre 1296 MHz requiere kernel parcheado de teacupx" },
     [STR_CPU_OC_KERNEL_MAX] = { "Patched kernel max: 1512 MHz  (github.com/teacupx/overclock-r36s)", "Max kernel parcheado: 1512 MHz  (github.com/teacupx/overclock-r36s)" },
-    [STR_CPU_FINETUNE]      = { "CPU Fine-Tune", "CPU Fine-Tune" },
-    [STR_CPU_FINETUNE_DESC] = { "Per-OPP voltage adjustment", "Ajuste de voltaje por OPP" },
+    [STR_CPU_FINETUNE]       = { "CPU Fine-Tune", "CPU Fine-Tune" },
+    [STR_CPU_FINETUNE_DESC]  = { "Per-OPP voltage adjustment", "Ajuste de voltaje por OPP" },
+    [STR_RAM_OC_1032]        = { "RAM OC 1032 MHz [EXP]", "RAM OC 1032 MHz [EXP]" },
+    [STR_RAM_OC_1032_DESC]   = { "Add 1040 MHz OPP — ATF delivers 1032 MHz", "Agrega OPP 1040 MHz — ATF entrega 1032 MHz" },
+    [STR_RAM_OC_1032_WARN1]  = { "vdd_logic rail fixed at chosen voltage — GPU OC UV savings lost above 1025 mV", "Rail vdd_logic fijado al voltaje elegido — ahorro UV GPU perdido sobre 1025 mV" },
+    [STR_RAM_OC_1032_WARN2]  = { "Instability crashes device but cannot damage RAM hardware", "Inestabilidad cuelga el device pero no puede dañar la RAM" },
+    [STR_RAM_OC_1032_REMOVE] = { "Remove 1032 MHz OC", "Eliminar OC 1032 MHz" },
+    [STR_RAM_OC_REMOVE]      = { "Remove RAM OC", "Eliminar RAM OC" },
+    [STR_RAM_OC_REMOVE_DESC] = { "Restore stock 786 MHz max — removes 924 and 1032 MHz OPPs", "Restaurar max stock 786 MHz — elimina OPPs 924 y 1032 MHz" },
+    [STR_TUNE_924_VOLT]      = { "Tune 924 MHz voltage", "Ajustar voltaje 924 MHz" },
 };
 
 static int current_lang = LANG_EN;
@@ -1343,11 +1359,12 @@ static void screen_dtb_cpu_finetune(const char *dtb, const char *opp_base,
 
     int opp_sel = 0;
     while (running) {
-        /* build OPP list — refresh voltages from opp[] each loop */
+        /* build OPP list highest-first — opp[] is sorted ascending by freq */
         LItem opp_items[MAX_OPP];
         for (int i = 0; i < n; i++) {
-            char mv[16]; fmt_mv(opp[i].volt_uv, mv, sizeof(mv));
-            snprintf(opp_items[i].label, 64, "%lld MHz", opp[i].freq_hz / 1000000LL);
+            int j = n - 1 - i;
+            char mv[16]; fmt_mv(opp[j].volt_uv, mv, sizeof(mv));
+            snprintf(opp_items[i].label, 64, "%lld MHz", opp[j].freq_hz / 1000000LL);
             snprintf(opp_items[i].desc,  96, "%s %s", mv, S(STR_MILLIVOLTS));
             opp_items[i].tag[0] = 0;
         }
@@ -1355,28 +1372,29 @@ static void screen_dtb_cpu_finetune(const char *dtb, const char *opp_base,
         snprintf(hint, sizeof(hint), "%s  %s", S(STR_DPAD_SELECT), S(STR_A_SELECT_B_BACK));
         int chosen_opp = submenu(S(STR_CPU_FINETUNE), bin_prop, opp_items, n, &opp_sel, hint, 1);
         if (chosen_opp < 0) return;
+        int real_opp = n - 1 - chosen_opp; /* map display index back to opp[] */
 
         /* voltage picker for the selected OPP */
         LItem vitems[VOLT_ITEMS_MAX]; int nvsel = 0;
-        int nv = volt_items_build(vitems, OPP_FLOOR_UV, 1350000, &nvsel, opp[chosen_opp].volt_uv);
+        int nv = volt_items_build(vitems, OPP_FLOOR_UV, 1350000, &nvsel, opp[real_opp].volt_uv);
         char freq_sub[64];
         snprintf(freq_sub, sizeof(freq_sub), "%lld MHz — %s",
-                 opp[chosen_opp].freq_hz / 1000000LL, bin_prop);
+                 opp[real_opp].freq_hz / 1000000LL, bin_prop);
         char volt_hint[128];
         snprintf(volt_hint, sizeof(volt_hint), "%s  %s", S(STR_DPAD_VOLTAGE), S(STR_A_APPLY_B_BACK));
         int chosen_v = submenu(S(STR_CPU_FINETUNE), freq_sub, vitems, nv, &nvsel, volt_hint, 1);
         if (chosen_v < 0) continue;
 
         int new_uv = volt_from_index(1350000, chosen_v);
-        if (new_uv == opp[chosen_opp].volt_uv) continue;
+        if (new_uv == opp[real_opp].volt_uv) continue;
 
         /* confirm */
         char old_mv[16], new_mv[16];
-        fmt_mv(opp[chosen_opp].volt_uv, old_mv, sizeof(old_mv));
+        fmt_mv(opp[real_opp].volt_uv, old_mv, sizeof(old_mv));
         fmt_mv(new_uv, new_mv, sizeof(new_mv));
         ConfirmRow rows[3]; int nr = 0;
         snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_FREQUENCY));
-        snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%lld MHz", opp[chosen_opp].freq_hz / 1000000LL);
+        snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%lld MHz", opp[real_opp].freq_hz / 1000000LL);
         rows[nr].col3[0] = 0; nr++;
         snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_ACTUAL_COL));
         snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", old_mv, S(STR_MILLIVOLTS));
@@ -1401,21 +1419,21 @@ static void screen_dtb_cpu_finetune(const char *dtb, const char *opp_base,
         /* patch single OPP — write 3-tuple (min typ max all same) */
         snprintf(cmd, sizeof(cmd),
             "echo ark | sudo -S fdtput -t u '%s' '%s' '%s' %d %d %d 2>/dev/null",
-            dtb, opp[chosen_opp].node, bin_prop, new_uv, new_uv, new_uv);
+            dtb, opp[real_opp].node, bin_prop, new_uv, new_uv, new_uv);
         int fail = (system(cmd) != 0);
         if (!fail && strcmp(bin_prop, "opp-microvolt") != 0) {
             snprintf(cmd, sizeof(cmd),
                 "echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt %d %d %d 2>/dev/null",
-                dtb, opp[chosen_opp].node, new_uv, new_uv, new_uv);
+                dtb, opp[real_opp].node, new_uv, new_uv, new_uv);
             system(cmd);
         }
 
         if (!fail) {
-            opp[chosen_opp].volt_uv = new_uv; /* update local state */
+            opp[real_opp].volt_uv = new_uv; /* update local state */
             dtb_mark_pending(); dtb_setup_safety();
             char msg[80];
             snprintf(msg, sizeof(msg), "%lld MHz @ %s %s",
-                     opp[chosen_opp].freq_hz / 1000000LL, new_mv, S(STR_MILLIVOLTS));
+                     opp[real_opp].freq_hz / 1000000LL, new_mv, S(STR_MILLIVOLTS));
             if (confirm_reboot(S(STR_DTB_PATCHED), msg)) do_reboot();
             return;
         } else {
@@ -1719,6 +1737,146 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
                  dtb,dmc_opp,dmc_bin);
         popen_into(cmd,r,sizeof(r)); cur_uv=atoi(r);
     }
+    /* if 924 MHz already active — show action submenu */
+    if (has_node) {
+        char r2[32];
+        snprintf(cmd,sizeof(cmd),"fdtget '%s' '%s/opp-1040000000' opp-hz 2>/dev/null | head -c 4",
+                 dtb,dmc_opp);
+        popen_into(cmd,r2,sizeof(r2));
+        int has_1032 = r2[0]!=0;
+
+        /* build dynamic menu */
+        LItem mopts[4]; int mopt_n=0, msel=0;
+        /* 0: tune 924 */
+        strncpy(mopts[mopt_n].label,S(STR_TUNE_924_VOLT),63);
+        mopts[mopt_n].desc[0]=0; mopts[mopt_n].tag[0]=0; mopt_n++;
+        /* 1: add or tune 1032 */
+        strncpy(mopts[mopt_n].label,S(STR_RAM_OC_1032),63);
+        strncpy(mopts[mopt_n].desc,S(STR_RAM_OC_1032_DESC),95);
+        strncpy(mopts[mopt_n].tag,has_1032?S(STR_ACTIVE):"",31); mopt_n++;
+        /* 2: remove 1032 (only if active) */
+        int idx_remove_1032=-1, idx_remove_all=-1;
+        if (has_1032) {
+            idx_remove_1032=mopt_n;
+            strncpy(mopts[mopt_n].label,S(STR_RAM_OC_1032_REMOVE),63);
+            mopts[mopt_n].desc[0]=0; mopts[mopt_n].tag[0]=0; mopt_n++;
+        }
+        /* last: remove all RAM OC */
+        idx_remove_all=mopt_n;
+        strncpy(mopts[mopt_n].label,S(STR_RAM_OC_REMOVE),63);
+        strncpy(mopts[mopt_n].desc,S(STR_RAM_OC_REMOVE_DESC),95);
+        mopts[mopt_n].tag[0]=0; mopt_n++;
+
+        char mhint[128];
+        snprintf(mhint,sizeof(mhint),"%s  %s",S(STR_DPAD_SELECT),S(STR_A_SELECT_B_BACK));
+        int mc=submenu(S(STR_RAM_OC_928),S(STR_VCC_DDR_RAIL),mopts,mopt_n,&msel,mhint,1);
+        if (mc<0) return;
+
+        /* ── Remove 1032 MHz ── */
+        if (mc==idx_remove_1032) {
+            if (!confirm_screen(S(STR_RAM_OC_1032_REMOVE),NULL,NULL,NULL,NULL,NULL,0,
+                                NULL,0,NULL,0,S(STR_APPLY),S(STR_CANCEL))) return;
+            char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
+            if (access(bak,F_OK)!=0){
+                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",dtb,bak);
+                if(system(cmd)!=0){show_info("ERROR",S(STR_BACKUP_FAILED));SDL_Delay(2000);return;}
+            }
+            show_info(S(STR_RAM_OC_1032_REMOVE),S(STR_PATCHING_DTB));
+            snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -r '%s' '%s/opp-1040000000' 2>/dev/null",dtb,dmc_opp);
+            if(system(cmd)==0){
+                dtb_mark_pending(); dtb_setup_safety();
+                if(confirm_reboot(S(STR_DTB_PATCHED),"1032 MHz OPP removed")) do_reboot();
+            } else {
+                show_info("ERROR",S(STR_PATCH_FAILED_RESTORE)); SDL_Delay(1500);
+            }
+            return;
+        }
+
+        /* ── Remove all RAM OC ── */
+        if (mc==idx_remove_all) {
+            if (!confirm_screen(S(STR_RAM_OC_REMOVE),NULL,NULL,NULL,NULL,NULL,0,
+                                NULL,0,NULL,0,S(STR_APPLY),S(STR_CANCEL))) return;
+            char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
+            if (access(bak,F_OK)!=0){
+                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",dtb,bak);
+                if(system(cmd)!=0){show_info("ERROR",S(STR_BACKUP_FAILED));SDL_Delay(2000);return;}
+            }
+            show_info(S(STR_RAM_OC_REMOVE),S(STR_PATCHING_DTB));
+            int fail=0;
+            if (has_1032) {
+                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -r '%s' '%s/opp-1040000000' 2>/dev/null",dtb,dmc_opp);
+                if(system(cmd)!=0) fail=1;
+            }
+            snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -r '%s' '%s/opp-928000000' 2>/dev/null",dtb,dmc_opp);
+            if(system(cmd)!=0) fail=1;
+            if(!fail){
+                dtb_mark_pending(); dtb_setup_safety();
+                if(confirm_reboot(S(STR_DTB_PATCHED),"RAM OC removed — stock 786 MHz")) do_reboot();
+            } else {
+                show_info("ERROR",S(STR_PATCH_FAILED_RESTORE)); SDL_Delay(1500);
+                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",bak,dtb);
+                system(cmd);
+            }
+            return;
+        }
+
+        /* ── Add / tune 1032 MHz ── */
+        if (mc==1) {
+            int cur_1032=0;
+            if (has_1032) {
+                snprintf(cmd,sizeof(cmd),"fdtget -t u '%s' '%s/opp-1040000000' '%s' 2>/dev/null | awk '{print $1}'",
+                         dtb,dmc_opp,dmc_bin);
+                popen_into(cmd,r2,sizeof(r2)); cur_1032=atoi(r2);
+            }
+            const char *w1032[]={ S(STR_RAM_OC_1032_WARN1), S(STR_RAM_OC_1032_WARN2) };
+            LItem vitems2[VOLT_ITEMS_MAX]; int nvsel2=0;
+            volt_items_build(vitems2,950000,1150000,&nvsel2,cur_1032?cur_1032:1150000);
+            int nv2=volt_items_build(vitems2,950000,1150000,&nvsel2,cur_1032?cur_1032:1150000);
+            char v1032hint[128];
+            snprintf(v1032hint,sizeof(v1032hint),"%s  %s",S(STR_DPAD_VOLTAGE),S(STR_A_APPLY_B_BACK));
+            int cv=submenu(S(STR_RAM_OC_1032),S(STR_RAM_OC_1032_DESC),vitems2,nv2,&nvsel2,v1032hint,1);
+            if (cv<0) return;
+            int volt_1032=volt_from_index(1150000,cv);
+            char mv_1032[16]; fmt_mv(volt_1032,mv_1032,sizeof(mv_1032));
+            ConfirmRow rows[2]; int nr=0;
+            snprintf(rows[nr].col1,CONFIRM_COL_LEN,"DMC"); snprintf(rows[nr].col2,CONFIRM_COL_LEN,"1032 %s",S(STR_MHZ)); rows[nr].col3[0]=0; nr++;
+            snprintf(rows[nr].col1,CONFIRM_COL_LEN,"%s",S(STR_VALUE)); snprintf(rows[nr].col2,CONFIRM_COL_LEN,"%s %s",mv_1032,S(STR_MILLIVOLTS)); rows[nr].col3[0]=0; nr++;
+            char t1032[64]; snprintf(t1032,sizeof(t1032),"%s — %s",S(STR_RAM_OC_1032),S(STR_CONFIRM));
+            if (!confirm_screen(t1032,NULL,NULL,NULL,NULL,rows,nr,w1032,2,NULL,0,S(STR_APPLY),S(STR_CANCEL))) return;
+            char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
+            if (access(bak,F_OK)!=0){
+                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",dtb,bak);
+                if(system(cmd)!=0){show_info("ERROR",S(STR_BACKUP_FAILED));SDL_Delay(2000);return;}
+            }
+            show_info(S(STR_RAM_OC_1032),S(STR_PATCHING_DTB));
+            int fail=0;
+            char npath1032[200]; snprintf(npath1032,sizeof(npath1032),"%s/opp-1040000000",dmc_opp);
+            if (!has_1032){
+                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -c '%s' '%s' 2>/dev/null",dtb,npath1032);
+                if(system(cmd)!=0) fail=1;
+                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' opp-hz 0 1040000000 2>/dev/null",dtb,npath1032);
+                if(system(cmd)!=0) fail=1;
+            }
+            snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' '%s' %d 2>/dev/null",dtb,npath1032,dmc_bin,volt_1032);
+            if(system(cmd)!=0) fail=1;
+            if(strcmp(dmc_bin,"opp-microvolt")!=0){
+                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt %d 2>/dev/null",dtb,npath1032,volt_1032);
+                system(cmd);
+            }
+            if(!fail){
+                dtb_mark_pending(); dtb_setup_safety();
+                char msg[80]; snprintf(msg,sizeof(msg),"1032 %s @ %s %s",S(STR_MHZ),mv_1032,S(STR_MILLIVOLTS));
+                if(confirm_reboot(S(STR_RAM_OC_1032),msg)) do_reboot();
+            } else {
+                show_info("ERROR",S(STR_PATCH_FAILED_RESTORE)); SDL_Delay(1500);
+                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",bak,dtb);
+                system(cmd);
+            }
+            return;
+        }
+        /* mc==0: fall through to tune 924 MHz voltage picker below */
+    }
+
     char sub[80];
     snprintf(sub,sizeof(sub),"%s | %s",has_node?S(STR_NODE_ACTIVE):S(STR_RAM_OC_928),S(STR_VCC_DDR_RAIL));
 
