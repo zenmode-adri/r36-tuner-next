@@ -355,7 +355,7 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_BENCHMARK_CPU_SCORE] = { "Score", "Puntuacion" },
     [STR_BENCHMARK_CPU_MOPS] = { "Mops/30s", "Mops/30s" },
     [STR_BENCHMARK_CPU_TEMP] = { "Temperature", "Temperatura" },
-    [STR_BENCHMARK_CPU_GCC_MISSING] = { "gcc not found. Install: apt install gcc", "gcc no encontrado. Instala: apt install gcc" },
+    [STR_BENCHMARK_CPU_GCC_MISSING] = { "Benchmark binary missing. Re-run launcher.", "Binario no encontrado. Relanza el launcher." },
     [STR_BENCHMARK_CPU_SET_BASELINE] = { "Baseline set", "Linea base guardada" },
     [STR_BENCHMARK_CPU_VS_BASELINE] = { "vs baseline", "vs linea base" },
     [STR_BENCHMARK_CPU_BACK] = { "Back", "Atras" },
@@ -366,7 +366,7 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_BENCHMARK_RAM_COPY] = { "Copy", "Copia" },
     [STR_BENCHMARK_RAM_RESULT] = { "Result", "Resultado" },
     [STR_BENCHMARK_RAM_MBPS] = { "MB/s", "MB/s" },
-    [STR_BENCHMARK_RAM_GCC_MISSING] = { "gcc not found. Install: apt install gcc", "gcc no encontrado. Instala: apt install gcc" },
+    [STR_BENCHMARK_RAM_GCC_MISSING] = { "Benchmark binary missing. Re-run launcher.", "Binario no encontrado. Relanza el launcher." },
     [STR_BENCHMARK_GPU_TITLE] = { "GPU Benchmark", "Benchmark GPU" },
     [STR_BENCHMARK_GPU_NOT_INSTALLED] = { "glmark2 legacy not found.", "glmark2 legacy no encontrado." },
     [STR_BENCHMARK_GPU_INSTALL] = { "Install glmark2 legacy?", "Instalar glmark2 legacy?" },
@@ -2165,43 +2165,11 @@ static void screen_dtb_restore(const char *dtb) {
 }
 
 /* ── Benchmark helpers ───────────────────────────────────────────────────── */
-#define CPU_BENCH_SRC  "/tmp/r36_cpubench_sdl.c"
-#define CPU_BENCH_BIN  "/tmp/r36_cpubench_sdl"
+#define CPU_BENCH_BIN  "/usr/local/bin/r36_cpubench"
 #define UI_SCORES_FILE "/home/ark/.r36_tuner_ui_scores.log"
 
-static int compile_cpu_bench(void) {
-    if (access(CPU_BENCH_BIN, X_OK) == 0) return 1;
-    FILE *f = fopen(CPU_BENCH_SRC, "w");
-    if (!f) return 0;
-    fprintf(f,
-        "#include <stdio.h>\n"
-        "#include <time.h>\n"
-        "#include <stdint.h>\n"
-        "int main() {\n"
-        "    struct timespec t0, t1;\n"
-        "    clock_gettime(CLOCK_MONOTONIC, &t0);\n"
-        "    uint32_t a=1, b=2, c=3, d=4;\n"
-        "    long long iters = 0;\n"
-        "    int i;\n"
-        "    do {\n"
-        "        for (i = 0; i < 10000000; i++) {\n"
-        "            a = a * 1664525u + 1013904223u;\n"
-        "            b = b * 1664525u + 1013904223u;\n"
-        "            c = c * 1664525u + 1013904223u;\n"
-        "            d = d * 1664525u + 1013904223u;\n"
-        "        }\n"
-        "        iters += 40000000;\n"
-        "        clock_gettime(CLOCK_MONOTONIC, &t1);\n"
-        "    } while ((t1.tv_sec - t0.tv_sec) < 30);\n"
-        "    if ((a ^ b ^ c ^ d) == 0) iters++;\n"
-        "    printf(\"%%lld\\n\", iters);\n"
-        "    return 0;\n"
-        "}\n");
-    fclose(f);
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "gcc -O1 -o %s %s 2>/dev/null", CPU_BENCH_BIN, CPU_BENCH_SRC);
-    int rc = system(cmd);
-    return (rc == 0 && access(CPU_BENCH_BIN, X_OK) == 0);
+static int check_cpu_bench(void) {
+    return access(CPU_BENCH_BIN, X_OK) == 0;
 }
 
 typedef struct {
@@ -2218,7 +2186,7 @@ typedef struct {
 
 static int cpu_bench_thread(void *data) {
     BenchState *st = (BenchState *)data;
-    if (!compile_cpu_bench()) {
+    if (!check_cpu_bench()) {
         st->gcc_ok = 0;
         st->done = 1;
         return 0;
@@ -2652,8 +2620,7 @@ static void screen_language(void){
 }
 
 /* ── RAM benchmark ───────────────────────────────────────────────────────── */
-#define RAM_BENCH_SRC "/tmp/r36_rambench_sdl.c"
-#define RAM_BENCH_BIN "/tmp/r36_rambench_sdl"
+#define RAM_BENCH_BIN "/usr/local/bin/r36_rambench"
 
 typedef struct {
     long long write_mbps;
@@ -2667,50 +2634,13 @@ typedef struct {
     int ram_mhz;
 } RamBenchState;
 
-static int compile_ram_bench(void) {
-    if (access(RAM_BENCH_BIN, X_OK) == 0) return 1;
-    FILE *f = fopen(RAM_BENCH_SRC, "w");
-    if (!f) return 0;
-    fprintf(f,
-        "#include <stdio.h>\n"
-        "#include <stdlib.h>\n"
-        "#include <string.h>\n"
-        "#include <time.h>\n"
-        "#define BUF (128*1024*1024)\n"
-        "#define DUR 15\n"
-        "int main() {\n"
-        "    char *a = malloc(BUF), *b = malloc(BUF);\n"
-        "    if (!a || !b) { puts(\"0\\n0\"); return 1; }\n"
-        "    memset(a, 0xAB, BUF);\n"
-        "    memset(b, 0x00, BUF);\n"
-        "    struct timespec t0, t1;\n"
-        "    long long n, ms;\n"
-        "    n = 0;\n"
-        "    clock_gettime(CLOCK_MONOTONIC, &t0);\n"
-        "    do { memset(b, 0xCD, BUF); n += BUF;\n"
-        "         clock_gettime(CLOCK_MONOTONIC, &t1);\n"
-        "    } while (t1.tv_sec - t0.tv_sec < DUR);\n"
-        "    ms = (t1.tv_sec-t0.tv_sec)*1000+(t1.tv_nsec-t0.tv_nsec)/1000000;\n"
-        "    printf(\"%%lld\\n\", n/1024/1024*1000/ms);\n"
-        "    n = 0;\n"
-        "    clock_gettime(CLOCK_MONOTONIC, &t0);\n"
-        "    do { memcpy(b, a, BUF); n += BUF;\n"
-        "         clock_gettime(CLOCK_MONOTONIC, &t1);\n"
-        "    } while (t1.tv_sec - t0.tv_sec < DUR);\n"
-        "    ms = (t1.tv_sec-t0.tv_sec)*1000+(t1.tv_nsec-t0.tv_nsec)/1000000;\n"
-        "    printf(\"%%lld\\n\", n/1024/1024*1000/ms);\n"
-        "    return 0;\n"
-        "}\n");
-    fclose(f);
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "gcc -O2 -o %s %s 2>/dev/null", RAM_BENCH_BIN, RAM_BENCH_SRC);
-    int rc = system(cmd);
-    return (rc == 0 && access(RAM_BENCH_BIN, X_OK) == 0);
+static int check_ram_bench(void) {
+    return access(RAM_BENCH_BIN, X_OK) == 0;
 }
 
 static int ram_bench_thread(void *data) {
     RamBenchState *st = (RamBenchState *)data;
-    if (!compile_ram_bench()) {
+    if (!check_ram_bench()) {
         st->gcc_ok = 0;
         st->done = 1;
         return 0;
