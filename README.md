@@ -13,7 +13,6 @@ Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](ht
 ### Frequencies & Governor
 - CPU max / min frequency and governor selection
 - GPU max frequency selection (Mali-G31 MP2)
-- RAM / DMC max frequency selection
 
 ### DTB Tuning (permanent, reboot required)
 - **CPU undervolt** — patches `vdd_arm` OPP table. Auto-detects chip bin (L0–L3) and patches the correct voltage property. Uniform offset across all OPPs.
