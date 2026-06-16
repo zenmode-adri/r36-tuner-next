@@ -1033,8 +1033,21 @@ static void dtb_setup_safety(void) {
             "ExecStart=/usr/local/bin/r36-dtb-safety.sh\\nRemainAfterExit=yes\\n\\n"
             "[Install]\\nWantedBy=basic.target\\n'"
         " > /etc/systemd/system/r36-dtb-safety.service\n"
+        /* late-boot service: clears BOOTING flag after ES starts OK */
+        "cat > /usr/local/bin/r36-dtb-ok.sh << 'OKEOF'\n"
+        "#!/bin/bash\n"
+        "rm -f /boot/.r36_dtb_patch_booting\n"
+        "sync\n"
+        "OKEOF\n"
+        "chmod +x /usr/local/bin/r36-dtb-ok.sh\n"
+        "printf '[Unit]\\nDescription=R36 DTB boot OK\\nAfter=emulationstation.service\\n\\n"
+            "[Service]\\nType=oneshot\\n"
+            "ExecStart=/usr/local/bin/r36-dtb-ok.sh\\nRemainAfterExit=yes\\n\\n"
+            "[Install]\\nWantedBy=multi-user.target\\n'"
+        " > /etc/systemd/system/r36-dtb-ok.service\n"
         "systemctl daemon-reload 2>/dev/null\n"
         "systemctl enable r36-dtb-safety.service 2>/dev/null\n"
+        "systemctl enable r36-dtb-ok.service 2>/dev/null\n"
     );
     fclose(f);
     system("echo ark | sudo -S bash /tmp/r36_safety_setup.sh > /dev/null 2>&1");
