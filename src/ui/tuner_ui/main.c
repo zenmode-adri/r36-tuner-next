@@ -1395,18 +1395,15 @@ static void screen_dtb_cpu_finetune(const char *dtb, const char *opp_base,
         char old_mv[16], new_mv[16];
         fmt_mv(opp[real_opp].volt_uv, old_mv, sizeof(old_mv));
         fmt_mv(new_uv, new_mv, sizeof(new_mv));
-        ConfirmRow rows[3]; int nr = 0;
-        snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_FREQUENCY));
-        snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%lld MHz", opp[real_opp].freq_hz / 1000000LL);
-        rows[nr].col3[0] = 0; nr++;
-        snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_ACTUAL_COL));
+        ConfirmRow rows[1]; int nr = 0;
+        snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%lld %s", opp[real_opp].freq_hz / 1000000LL, S(STR_MHZ));
         snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", old_mv, S(STR_MILLIVOLTS));
-        rows[nr].col3[0] = 0; nr++;
-        snprintf(rows[nr].col1, CONFIRM_COL_LEN, "%s", S(STR_NEW_COL));
-        snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", new_mv, S(STR_MILLIVOLTS));
-        rows[nr].col3[0] = 0; nr++;
+        snprintf(rows[nr].col3, CONFIRM_COL_LEN, "%s %s", new_mv, S(STR_MILLIVOLTS));
+        nr++;
         char title[64]; snprintf(title, sizeof(title), "%s — %s", S(STR_CPU_FINETUNE), S(STR_CONFIRM));
-        if (!confirm_screen(title, NULL, NULL, NULL, NULL, rows, nr,
+        if (!confirm_screen(title, NULL,
+                            S(STR_FREQUENCY), S(STR_ACTUAL_COL), S(STR_NEW_COL),
+                            rows, nr,
                             NULL, 0, NULL, 0, S(STR_APPLY), S(STR_CANCEL)))
             continue;
 
