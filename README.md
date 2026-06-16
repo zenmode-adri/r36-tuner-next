@@ -44,6 +44,25 @@ CPU overclocking above 1296 MHz is made possible by [teacupx/overclock-r36s](htt
 
 ---
 
+## Screenshots
+
+<table>
+<tr>
+<td align="center"><img src="docs/screenshots/mainmenu.jpeg" width="280"/><br/><sub>Main menu</sub></td>
+<td align="center"><img src="docs/screenshots/dbt_menu.jpeg" width="280"/><br/><sub>DTB Tuning menu</sub></td>
+<td align="center"><img src="docs/screenshots/cpu_uv.jpeg" width="280"/><br/><sub>CPU undervolt — confirm screen</sub></td>
+<td align="center"><img src="docs/screenshots/voltage_table.jpeg" width="280"/><br/><sub>OPP voltage table</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/screenshots/gpu_oc.jpeg" width="280"/><br/><sub>GPU OC 600 MHz — confirm</sub></td>
+<td align="center"><img src="docs/screenshots/benchmark.jpeg" width="280"/><br/><sub>Benchmark menu</sub></td>
+<td align="center"><img src="docs/screenshots/scorehistory.jpeg" width="280"/><br/><sub>Score history</sub></td>
+<td align="center"><img src="docs/screenshots/restore.jpeg" width="280"/><br/><sub>Restore original DTB</sub></td>
+</tr>
+</table>
+
+---
+
 ## Requirements
 
 - **Device:** R36S or compatible RK3326 / RK3326S clone
