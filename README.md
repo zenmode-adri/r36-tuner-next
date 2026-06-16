@@ -112,6 +112,8 @@ Copy both files to the **FAT32 partition** of the SD card (visible on any PC). I
 
 Requires **1150 mV** on `vdd_logic` (PMIC ceiling — no UV margin at this frequency).
 
+> **RAM silicon lottery:** 1032 MHz stability depends on your specific RAM chips. Some units will run it fine; others may crash or show corruption under memory pressure. If unstable, drop back to 924 MHz — it has proven headroom for undervolting and is the recommended OC target.
+
 ### GPU OC glmark2
 
 | Config | Score | GPU MHz | Peak temp |
