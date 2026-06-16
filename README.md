@@ -138,7 +138,8 @@ If a DTB patch causes a hard boot failure:
 
 ## Disclaimer
 
-> **USE AT YOUR OWN RISK.** This tool patches the Device Tree Binary and modifies CPU, GPU, and RAM voltages. The authors take no responsibility for bricked devices or data loss.
+> [!WARNING]
+> **USE AT YOUR OWN RISK.** This tool patches the Device Tree Binary and modifies CPU, GPU, and RAM voltages. The authors take **no responsibility** for bricked devices, corrupted SD cards, or data loss. Always start conservative and verify stability before going further.
 
 ---
 

@@ -208,6 +208,7 @@ typedef enum {
     STR_RAM_OC_1032_DESC,
     STR_RAM_OC_1032_WARN1,
     STR_RAM_OC_1032_WARN2,
+    STR_RAM_OC_1032_WARN3,
     STR_RAM_OC_1032_REMOVE,
     STR_RAM_OC_REMOVE,
     STR_RAM_OC_REMOVE_DESC,
@@ -397,6 +398,7 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_RAM_OC_1032_DESC]   = { "Add 1040 MHz OPP — ATF delivers 1032 MHz", "Agrega OPP 1040 MHz — ATF entrega 1032 MHz" },
     [STR_RAM_OC_1032_WARN1]  = { "vdd_logic rail fixed at chosen voltage — GPU OC UV savings lost above 1025 mV", "Rail vdd_logic fijado al voltaje elegido — ahorro UV GPU perdido sobre 1025 mV" },
     [STR_RAM_OC_1032_WARN2]  = { "Instability crashes device but cannot damage RAM hardware", "Inestabilidad cuelga el device pero no puede dañar la RAM" },
+    [STR_RAM_OC_1032_WARN3]  = { "Stability depends on your RAM chip — if unstable, revert to 924 MHz", "Estabilidad depende de tu chip RAM — si inestable, vuelve a 924 MHz" },
     [STR_RAM_OC_1032_REMOVE] = { "Remove 1032 MHz OC", "Eliminar OC 1032 MHz" },
     [STR_RAM_OC_REMOVE]      = { "Remove RAM OC", "Eliminar RAM OC" },
     [STR_RAM_OC_REMOVE_DESC] = { "Restore stock 786 MHz max — removes 924 and 1032 MHz OPPs", "Restaurar max stock 786 MHz — elimina OPPs 924 y 1032 MHz" },
@@ -1828,7 +1830,7 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
                          dtb,dmc_opp,dmc_bin);
                 popen_into(cmd,r2,sizeof(r2)); cur_1032=atoi(r2);
             }
-            const char *w1032[]={ S(STR_RAM_OC_1032_WARN1), S(STR_RAM_OC_1032_WARN2) };
+            const char *w1032[]={ S(STR_RAM_OC_1032_WARN1), S(STR_RAM_OC_1032_WARN2), S(STR_RAM_OC_1032_WARN3) };
             LItem vitems2[VOLT_ITEMS_MAX]; int nvsel2=0;
             volt_items_build(vitems2,950000,1150000,&nvsel2,cur_1032?cur_1032:1150000);
             int nv2=volt_items_build(vitems2,950000,1150000,&nvsel2,cur_1032?cur_1032:1150000);
@@ -1842,7 +1844,7 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
             snprintf(rows[nr].col1,CONFIRM_COL_LEN,"DMC"); snprintf(rows[nr].col2,CONFIRM_COL_LEN,"1032 %s",S(STR_MHZ)); rows[nr].col3[0]=0; nr++;
             snprintf(rows[nr].col1,CONFIRM_COL_LEN,"%s",S(STR_VALUE)); snprintf(rows[nr].col2,CONFIRM_COL_LEN,"%s %s",mv_1032,S(STR_MILLIVOLTS)); rows[nr].col3[0]=0; nr++;
             char t1032[64]; snprintf(t1032,sizeof(t1032),"%s — %s",S(STR_RAM_OC_1032),S(STR_CONFIRM));
-            if (!confirm_screen(t1032,NULL,NULL,NULL,NULL,rows,nr,w1032,2,NULL,0,S(STR_APPLY),S(STR_CANCEL))) return;
+            if (!confirm_screen(t1032,NULL,NULL,NULL,NULL,rows,nr,w1032,3,NULL,0,S(STR_APPLY),S(STR_CANCEL))) return;
             char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
             if (access(bak,F_OK)!=0){
                 snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",dtb,bak);
