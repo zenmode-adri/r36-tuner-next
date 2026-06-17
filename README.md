@@ -124,7 +124,7 @@ Requires **1150 mV** on `vdd_logic` (PMIC ceiling — no UV margin at this frequ
 | Stock | 560 pts | 520 MHz | 51 °C |
 | GPU OC | **620 pts** | **600 MHz** | 51 °C |
 
-> Test unit has thermal pad + active fan. GPU undervolt offsets the extra heat from OC — temps stay close to stock.
+> Tested with thermal pad. GPU undervolt offsets the extra heat from OC — temps stay close to stock.
 
 ---
 
