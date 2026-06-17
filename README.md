@@ -76,7 +76,7 @@ CPU overclocking above 1296 MHz is made possible by [teacupx/overclock-r36s](htt
 
 ## Installation
 
-Download **`R36.Tuner.Next.sh`** from the [latest release](https://github.com/zenmode-adri/r36-tuner-next/releases/latest). Copy it to `/opt/system/` on the device.
+Download **`R36.Tuner.Next.sh`** from the [latest release](https://github.com/zenmode-adri/r36-tuner-next/releases/latest). Copy it to `/opt/system/` on the device. It will appear under **Options** in the dArkOSRE menu.
 
 **Option A — SSH (recommended)**
 ```bash
@@ -85,7 +85,7 @@ scp "R36.Tuner.Next.sh" ark@<device-ip>:/opt/system/
 
 **Option B — SD card + file manager (no network needed)**
 
-Copy the file to the **FAT32 partition** of the SD card (visible on any PC). Insert the card, boot the device, open a file manager (e.g. **351Files**) and move it to `/opt/system/`. It will appear in the dArkOSRE system menu.
+Copy the file to the **FAT32 partition** of the SD card (visible on any PC). Insert the card, boot the device, open a file manager (e.g. **351Files**) and move it to `/opt/system/`.
 
 **First launch:** extracts bundled tools (`fdtget`, `fdtput`, benchmarks, glmark2) — takes ~30 seconds, one time only.
 
