@@ -18,7 +18,7 @@
 
 ### teacupx battery warning
 
-The teacupx DTB has two battery miscalibrations on dArkOSRE-R36: it ships the RG351P OCV table (wrong cell chemistry, 4.0V vs 4.2V), and sets the low-battery cutoff to 3000 mV instead of 3300 mV. The battery percentage will be inaccurate, and the device runs to the absolute cell minimum before shutting down — leaving no margin against deep discharge from standby current after power-off. See README for details.
+The teacupx kernel inherits battery miscalibrations from its upstream source (christianhaitian/linux R35S DTS): OCV table capped at 4000 mV instead of 4177 mV (battery percentage understated), and `power_off_thresd = 3000 mV` instead of 3300 mV in stock dArkOSRE. The device runs to the absolute cell minimum before shutting down, leaving no margin against deep discharge from standby current after power-off. This is an upstream issue, not a deliberate teacupx choice. See README for details.
 
 ### Internal hardening
 
