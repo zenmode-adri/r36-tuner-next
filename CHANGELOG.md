@@ -9,16 +9,9 @@
 - Writes `max_cpufreq=` to boot.ini; appends the key if not already present
 - Confirm screen before any write; takes effect on next reboot
 
-> [!WARNING]
-> We do not recommend using the teacupx kernel on dArkOSRE-R36. It was built for dArkOS (RG351 devices) and ships battery calibration data for the wrong hardware — see below. The CPU OC (boot.ini) feature is included for users who already have it installed and are aware of the risks.
-
 ### GPU benchmark EGL fix
 
 - Fixed GPU benchmark on Panel 4 v22 (and any device where `libEGL.so` points to Mesa/Panfrost): runner script now uses the Mali blob directly, matching the v1.7 launcher fix
-
-### teacupx battery warning
-
-The teacupx kernel inherits battery miscalibrations from its upstream source (christianhaitian/linux R35S DTS): OCV table capped at 4000 mV instead of 4177 mV (battery percentage understated), and `power_off_thresd = 3000 mV` instead of 3300 mV in stock dArkOSRE. The device runs to the absolute cell minimum before shutting down, leaving no margin against deep discharge from standby current after power-off. This is an upstream issue, not a deliberate teacupx choice. See README for details.
 
 ### Internal hardening
 

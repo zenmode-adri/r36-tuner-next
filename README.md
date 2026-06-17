@@ -21,7 +21,7 @@ Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](ht
 ### DTB Tuning (permanent, reboot required)
 - **CPU undervolt** — reduce CPU voltages across all frequency steps. Auto-detects your chip bin (L0–L3).
 - **CPU fine-tune** — set voltage per individual frequency step (1008 / 1200 / 1248 / 1296 / 1512 MHz).
-- **CPU OC** — requires [teacupx kernel](https://github.com/teacupx/overclock-r36s) installed separately. Max real freq: 1512 MHz. ⚠️ teacupx was built for dArkOS (RG351), not dArkOSRE-R36 — it ships a wrong battery OCV table and a lower cutoff voltage. See warning below.
+- **CPU OC** — requires [teacupx kernel](https://github.com/teacupx/overclock-r36s) installed separately. Max real freq: 1512 MHz.
 - **GPU OC 600 MHz** — unlocks 600 MHz on the Mali-G31.
 - **RAM OC 928 MHz** — unlocks ~924 MHz on the DMC controller.
 - **RAM OC 1032 MHz** [EXPERIMENTAL] — available once 924 MHz is active.
@@ -45,15 +45,6 @@ Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](ht
 ### CPU OC + teacupx
 
 CPU overclocking above 1296 MHz is made possible by [teacupx/overclock-r36s](https://github.com/teacupx/overclock-r36s) — a patched kernel that removes the RK3326 binning restriction and adds OPPs up to 1512 MHz. Install it first, then use R36 Tuner Next to fine-tune voltages at each unlocked frequency step and find your chip's stable floor.
-
-> [!WARNING]
-> **The teacupx kernel inherits battery miscalibrations from its upstream source ([christianhaitian/linux](https://github.com/christianhaitian/linux), R35S DTS) that are incorrect for the R36S:**
->
-> 1. **Wrong OCV table.** The R35S DTS caps the OCV table at 4000 mV (100%). The R36S uses the same 4.2V Li-ion cell as stock dArkOSRE (100% = 4177 mV). The battery percentage shown on screen will be understated — the cell has more charge than reported.
->
-> 2. **Cutoff too low.** `power_off_thresd = 3000 mV` (from the R35S DTS) vs 3300 mV in stock dArkOSRE. For this cell, 3300 mV is the safe empty threshold; 3000 mV is the manufacturer's absolute minimum. Any further drain after shutdown (PMIC standby, sleep current) can push the cell below 3.0 V and cause permanent damage.
->
-> This is an upstream issue in the R35S kernel config, not a deliberate teacupx choice. Stock dArkOSRE has it correctly calibrated for the R36S. **We are not responsible for battery damage caused by using teacupx on dArkOSRE-R36.** Charge the device promptly after it powers off and do not leave it unattended on battery.
 
 ---
 
