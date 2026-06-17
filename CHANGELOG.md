@@ -9,8 +9,8 @@
 - Writes `max_cpufreq=` to boot.ini; appends the key if not already present
 - Confirm screen before any write; takes effect on next reboot
 
-> [!IMPORTANT]
-> We do not recommend using the teacupx kernel on dArkOSRE-R36. It was built for dArkOS (RG351 devices) and ships battery calibration data for the wrong hardware — see warning below. The CPU OC (boot.ini) feature is included for users who already have it installed and are aware of the risks.
+> [!WARNING]
+> We do not recommend using the teacupx kernel on dArkOSRE-R36. It was built for dArkOS (RG351 devices) and ships battery calibration data for the wrong hardware — see below. The CPU OC (boot.ini) feature is included for users who already have it installed and are aware of the risks.
 
 ### GPU benchmark EGL fix
 
