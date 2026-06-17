@@ -1,6 +1,7 @@
 # R36 Tuner Next
 
 [![GitHub release](https://img.shields.io/github/v/release/zenmode-adri/r36-tuner-next?style=flat-square)](https://github.com/zenmode-adri/r36-tuner-next/releases)
+[![GitHub downloads](https://img.shields.io/github/downloads/zenmode-adri/r36-tuner-next/total?style=flat-square)](https://github.com/zenmode-adri/r36-tuner-next/releases)
 [![GitHub stars](https://img.shields.io/github/stars/zenmode-adri/r36-tuner-next?style=flat-square)](https://github.com/zenmode-adri/r36-tuner-next/stargazers)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=ko-fi&style=flat-square)](https://ko-fi.com/zenmodeadri)
 
