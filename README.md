@@ -47,9 +47,9 @@ Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](ht
 CPU overclocking above 1296 MHz is made possible by [teacupx/overclock-r36s](https://github.com/teacupx/overclock-r36s) — a patched kernel that removes the RK3326 binning restriction and adds OPPs up to 1512 MHz. Install it first, then use R36 Tuner Next to fine-tune voltages at each unlocked frequency step and find your chip's stable floor.
 
 > [!WARNING]
-> **The teacupx kernel targets dArkOS (RG351 devices), not dArkOSRE-R36.** It is built from the RG351P kernel config (`rg351p_tweaked_defconfig`), which does not match the R36S board hardware. On dArkOSRE-R36, this kernel may disable the battery low-voltage cutoff — the RK817 PMIC fuel gauge can fail to initialize correctly, causing `/sys/class/power_supply/battery/voltage_now` to report incorrectly or not at all. If the low-battery daemon cannot read voltage, it will never trigger an emergency shutdown, and the battery can deep-discharge below safe levels (< 3.3 V), causing permanent cell damage.
+> **The teacupx DTB lowers the battery cutoff threshold from 3300 mV (stock dArkOSRE) to 3000 mV.** This means the device will keep running until the battery reaches its absolute minimum instead of shutting down with a safe margin. At 3000 mV the cell is not yet damaged, but any further drain (sleep current, PMIC standby) after shutdown can push it below safe levels. Stock dArkOSRE shuts down 300 mV earlier, which is the correct safe margin for Li-ion cells.
 >
-> **We are not responsible for battery damage caused by running an incompatible kernel.** If you use teacupx on dArkOSRE-R36, do not leave the device unattended while running on battery.
+> **We are not responsible for battery damage caused by using teacupx on dArkOSRE-R36.** If you use it, do not leave the device unattended on battery for extended periods after it powers off.
 
 ---
 

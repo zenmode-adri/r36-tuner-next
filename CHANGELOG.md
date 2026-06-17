@@ -13,9 +13,9 @@
 
 - Fixed GPU benchmark on Panel 4 v22 (and any device where `libEGL.so` points to Mesa/Panfrost): runner script now uses the Mali blob directly, matching the v1.7 launcher fix
 
-### teacupx kernel warning
+### teacupx battery warning
 
-The teacupx kernel was built for dArkOS (RG351), not dArkOSRE-R36. On dArkOSRE-R36 it may disable the battery low-voltage cutoff, allowing deep discharge below safe levels. Do not leave the device unattended on battery with teacupx installed. See README for details.
+The teacupx DTB sets the battery cutoff threshold to 3000 mV vs 3300 mV in stock dArkOSRE. The device will run 300 mV deeper into the cell before shutting down, leaving less margin against deep discharge if left unattended after power-off. See README for details.
 
 ### Internal hardening
 
