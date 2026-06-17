@@ -21,7 +21,7 @@ Graphical tuner for R36S and compatible RK3326 devices running [dArkOSRE-R36](ht
 ### DTB Tuning (permanent, reboot required)
 - **CPU undervolt** — reduce CPU voltages across all frequency steps. Auto-detects your chip bin (L0–L3).
 - **CPU fine-tune** — set voltage per individual frequency step (1008 / 1200 / 1248 / 1296 / 1512 MHz).
-- **CPU OC** — requires [teacupx kernel](https://github.com/teacupx/overclock-r36s) installed separately. Max real freq: 1512 MHz.
+- **CPU OC** — requires [teacupx kernel](https://github.com/teacupx/overclock-r36s) installed separately. Max real freq: 1512 MHz. ⚠️ teacupx was built for dArkOS (RG351), not dArkOSRE-R36 — it ships a wrong battery OCV table and a lower cutoff voltage. See warning below.
 - **GPU OC 600 MHz** — unlocks 600 MHz on the Mali-G31.
 - **RAM OC 928 MHz** — unlocks ~924 MHz on the DMC controller.
 - **RAM OC 1032 MHz** [EXPERIMENTAL] — available once 924 MHz is active.
