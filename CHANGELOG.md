@@ -1,5 +1,13 @@
 # R36 Tuner Next — Changelog
 
+## v1.9 — 2026-06-18
+
+### Launcher fix — KillMode compatibility
+
+- Launcher now uses `systemd-run --scope` to escape the EmulationStation systemd cgroup before stopping ES. On systems where the ES service uses the default `KillMode=control-group`, the previous `setsid`-only approach caused the launcher to be killed by systemd when stopping ES. Falls back to `setsid` if `systemd-run` is unavailable.
+
+---
+
 ## v1.8 — 2026-06-17
 
 ### teacupx boot.ini integration
