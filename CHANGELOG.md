@@ -13,6 +13,10 @@
 
 - Fixed GPU benchmark on Panel 4 v22 (and any device where `libEGL.so` points to Mesa/Panfrost): runner script now uses the Mali blob directly, matching the v1.7 launcher fix
 
+### teacupx kernel warning
+
+The teacupx kernel was built for dArkOS (RG351), not dArkOSRE-R36. On dArkOSRE-R36 it may disable the battery low-voltage cutoff, allowing deep discharge below safe levels. Do not leave the device unattended on battery with teacupx installed. See README for details.
+
 ### Internal hardening
 
 - OPP voltage scan now rejects out-of-range values from `fdtget` — prevents "0 mV" entries in the voltage table if fdtget returns an empty or malformed value
