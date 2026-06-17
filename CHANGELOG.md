@@ -2,9 +2,9 @@
 
 ## v1.9 — 2026-06-18
 
-### Launcher fix — KillMode compatibility
+### Launcher fix — cgroupsv2 cgroup escape
 
-- Launcher now uses `systemd-run --scope` to escape the EmulationStation systemd cgroup before stopping ES. On systems where the ES service uses the default `KillMode=control-group`, the previous `setsid`-only approach caused the launcher to be killed by systemd when stopping ES. Falls back to `setsid` if `systemd-run` is unavailable.
+- Fixed launcher being killed by systemd on dArkOSRE trixie (cgroupsv2 unified hierarchy). When the launcher calls `systemctl stop emulationstation`, systemd kills all processes in the ES service cgroup — including our script. `setsid` alone does not escape cgroupsv2 because child processes inherit the cgroup from the parent, not from the session. Fix: write the launcher PID to `/sys/fs/cgroup/cgroup.procs` (root cgroup) before calling `setsid`; the setsid child then inherits the root cgroup and is not affected when the ES service cgroup is torn down.
 
 ---
 

@@ -33,7 +33,8 @@ Rail: `vdd_arm` (DCDC_REG2) · DTB node format: `opp-<hz>` · Values: `[min, typ
 
 > Values from official [dArkOSRE-R36](https://github.com/southoz/dArkOSRE-R36) DTB.  
 > `max` col in [min, typ, max] tuple is the voltage ceiling; kernel uses `min`/`typ`.  
-> Constraint: vdd_arm min=950 mV, max=1350 mV.
+> Constraint: vdd_arm min=950 mV, max=1350 mV.  
+> **Note:** The 1512 MHz OPP exists in the stock DTB but the silicon does not run faster than ~1296 MHz on the stock kernel. Real CPU OC above 1296 MHz requires the [teacupx kernel](https://github.com/teacupx/overclock-r36s).
 
 ### CPU Undervolt Test Results (L2 bin)
 
@@ -179,11 +180,13 @@ Recovery: patch DTB back to 1025 mV without reboot (`fdtput` over SSH), no SD ca
 
 ---
 
-## CPU OC — 1608 MHz (confirmed working)
+## CPU OC — stock kernel cap & teacupx
 
-**1608 MHz is achievable via DTB only — no kernel recompile needed.**
+**On the stock dArkOSRE kernel, the silicon does not run faster than ~1296 MHz regardless of what cpufreq reports.**
 
-Earlier testing showed the kernel ignoring the 1608 MHz OPP. Root cause was `rockchip,avs-scale=4` in `/cpu0-opp-table`, not the clock driver.
+Adding `opp-1608000000` + `rockchip,avs-scale=0` to the DTB makes the kernel report the frequency and the PLL reaches the requested rate, but execution speed is capped at ~1296 MHz. This was confirmed by benchmarking: measured performance at 1512 and 1608 MHz (stock kernel) is identical to 1296 MHz.
+
+Real CPU OC above 1296 MHz requires the [teacupx kernel](https://github.com/teacupx/overclock-r36s), which bypasses the RK3326 binning restriction. Max real frequency with teacupx: **1512 MHz**.
 
 ### Mechanism: AVS (Adaptive Voltage Scaling)
 
@@ -191,34 +194,24 @@ Earlier testing showed the kernel ignoring the 1608 MHz OPP. Root cause was `roc
 `rockchip_adjust_opp_table(dev, scale_to_rate(4))` = `rockchip_adjust_opp_table(dev, 1512 MHz)`,
 which **actively removes all OPPs above 1512 MHz** from the table at boot.
 
-Fix: set `rockchip,avs-scale=0`. The condition `opp_scale(0) < avs_scale(0)` = FALSE → no OPPs removed.
+Setting `rockchip,avs-scale=0` unblocks the OPP table, but does not make the silicon run faster — the binning restriction is enforced elsewhere in the stock kernel.
 
-The PX30 clock driver (`drivers/clk/rockchip/clk-px30.c`) already contains 1608 MHz in both
-`px30_cpuclk_rates` and `px30_pll_rates` (RK3326 = PX30 same SoC, same driver).
+The PX30 clock driver already contains 1608 MHz in `px30_cpuclk_rates` and `px30_pll_rates`, which is why the PLL reaches the requested rate even though silicon execution does not.
 
-### DTB changes required
+### Benchmark results — ALU (LCG C, 10s, stock kernel)
 
-1. Add OPP node to `/cpu0-opp-table`:
-   ```
-   opp-1608000000 { opp-hz = /bits/ 64 <1608000000>; opp-microvolt-L2 = <1350000 1350000 1350000>; }
-   ```
-2. Change `rockchip,avs-scale` from `4` to `0` in `/cpu0-opp-table`.
+| MHz  | Mops | vs 1008 MHz | Note |
+|------|------|-------------|------|
+| 1008 | 1500 | 100%        | |
+| 1200 | 1730 | +15%        | |
+| 1248 | 1780 | +19%        | |
+| 1296 | 1920 | +28%        | silicon max on stock kernel |
+| 1512 | 1870 | +25%        | fake — PLL high, silicon at ~1296 MHz |
+| 1608 | 1900 | +27%        | fake — PLL high, silicon at ~1296 MHz |
 
-Voltage used: **1187.5 mV** (L2 bin, confirmed stable). Conservative starting point is 1350 mV (same as 1512 MHz stock L2); tuner lets user reduce from there.
+Score variance between 1296/1512/1608 MHz is within noise — confirms silicon cap.
 
-### Benchmark results — ALU (LCG C, 10s)
-
-| MHz  | Mops | vs 1008 MHz |
-|------|------|-------------|
-| 1008 | 1500 | 100%        |
-| 1200 | 1730 | +15%        |
-| 1248 | 1780 | +19%        |
-| 1296 | 1920 | +28%        |
-| 1512 | 1870 | +25%        |
-| 1608 | 1900 | +27%        |
-
-**Sweet spot: 1512 MHz @ 1175 mV (undervolted).** Seven synthetic benchmarks showed 0–2% difference between 1512 and 1608 MHz — ALU throughput saturates at 1512 MHz, Coremark is L2-latency-bound (RAM OC has zero effect on it), L1 pointer chasing shows only +1.8% (theoretical +6.3%). The 1608 MHz benefit is real but only observable in emulation (JIT, multi-thread frame timing) — not in single-thread synthetic tests.
-GPU benchmark (terrain) is identical at all CPU frequencies — GPU-limited, not CPU-limited.
+Seven synthetic benchmarks (LCG, Coremark, L1 pointer chasing, EMU branch) showed 0–2% difference between 1296, 1512, and 1608 MHz on stock kernel. GPU benchmark (terrain) is identical at all CPU frequencies — GPU-limited, not CPU-limited.
 
 ### GPU OC
 
@@ -300,7 +293,7 @@ terrain shows no change because Mali-G31 at 600 MHz is ALU-saturated. Expected b
 
 ### DMC UV Sweep — 928 MHz OPP (L2 bin)
 
-Automated sweep: CPU 1608 MHz, DMC pinned at 924 MHz (`governor=performance`), 128 MB memset+memcpy stress 30 s per step. Starting point: 1075 mV (conservative).
+Automated sweep: CPU at 1608 MHz (stock kernel, effective ~1296 MHz), DMC pinned at 924 MHz (`governor=performance`), 128 MB memset+memcpy stress 30 s per step. Starting point: 1075 mV (conservative).
 
 | Voltage | Result | MB/s |
 |---------|--------|------|
@@ -323,7 +316,7 @@ Automated sweep: CPU 1608 MHz, DMC pinned at 924 MHz (`governor=performance`), 1
 ## Real-World Gaming Impact — God of War: Ghost of Sparta (PSP / PPSSPP)
 
 Measured in-game via LD_PRELOAD overlay (FPS sampled every second, 10s average per step).  
-Device: L2 bin · CPU fixed at 1608 MHz throughout.
+Device: L2 bin · CPU fixed at 1608 MHz throughout (stock kernel — effective silicon speed ~1296 MHz).
 
 ### RAM frequency sweep (GPU fixed at 600 MHz)
 
@@ -352,7 +345,7 @@ Device: L2 bin · CPU fixed at 1608 MHz throughout.
 |---------------|----------|-----------------|
 | RAM 528 → 1032 MHz | +7.4 FPS | **highest** |
 | GPU 400 → 600 MHz  | +3.5 FPS | medium |
-| CPU 1200 → 1608 MHz | ~+3 FPS | low |
+| CPU 1200 → 1296 MHz (effective) | ~+3 FPS | low |
 
 **RAM dominates in PSP emulation.** CPU and GPU share a UMA bus — every frame the JIT engine writes recompiled code, the GPU reads textures, and the CPU reads guest instructions, all competing for the same physical memory. Bandwidth is the real bottleneck, not compute.
 
