@@ -3257,7 +3257,7 @@ static void create_gpu_runner(void) {
         "done ) &\n"
         "SAMPLER_PID=$!\n"
         "# Run off-screen — no DRM master needed, ES keeps running.\n"
-        "glmark2-es2-drm --off-screen --data-path /usr/share/glmark2 "
+        "/usr/local/bin/glmark2-es2-drm-legacy --off-screen --data-path /usr/local/share/glmark2data "
         "--size 320x240 "
         "-b build:duration=15 -b texture:duration=15 "
         "-b shading:duration=15 -b terrain:duration=15 > \"$GL_LOG\" 2>&1\n"
@@ -3289,9 +3289,9 @@ static void create_gpu_runner(void) {
 }
 
 static void screen_gpu_benchmark(void) {
-    if (access("/usr/bin/glmark2-es2-drm", X_OK) != 0) {
+    if (access("/usr/local/bin/glmark2-es2-drm-legacy", X_OK) != 0) {
         show_info(S(STR_BENCHMARK_GPU_TITLE),
-                  "glmark2 not found.\nInstall: apt install glmark2-es2-drm");
+                  "glmark2 legacy not found.\nRe-run launcher to extract.");
         SDL_Delay(4000);
         return;
     }
