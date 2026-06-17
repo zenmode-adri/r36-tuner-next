@@ -22,6 +22,15 @@
 #define DTB_PENDING_FLAG "/boot/.r36_dtb_patch_pending"
 #define BIN_CACHE_FILE   "/etc/r36_tuner_bin"
 #define OPP_FLOOR_UV     950000
+#define UV_STEP_UV       12500      /* voltage picker step */
+#define CPU_MAX_UV       1350000    /* vdd_arm picker ceiling */
+#define LOGIC_MAX_UV     1150000    /* vdd_logic picker ceiling (GPU + RAM) */
+#define CPU_STOCK_MAX_MHZ 1296      /* stock kernel silicon ceiling */
+#define CPU_OC_MAX_MHZ   1512       /* teacupx kernel max */
+#define CPU_OPP_NODE_MHZ 1608       /* OPP node we create for CPU OC */
+#define GPU_OC_MHZ       600        /* GPU OC target */
+#define RAM_OC_MHZ       928        /* RAM OC target (actual PLL: ~924 MHz) */
+#define RAM_OC_ULTRA_MHZ 1032       /* RAM ultra OC (ATF delivers via 1040 MHz PLL) */
 #define LANG_FILE        "/etc/r36_tuner_ui_lang"
 
 /* ── Internationalization ───────────────────────────────────────────────── */
@@ -213,6 +222,11 @@ typedef enum {
     STR_RAM_OC_REMOVE,
     STR_RAM_OC_REMOVE_DESC,
     STR_TUNE_924_VOLT,
+    STR_CPU_OC_BOOTINI,
+    STR_BOOTINI_DESC,
+    STR_BOOTINI_NOT_FOUND,
+    STR_BOOTINI_CURRENT,
+    STR_BOOTINI_APPLIED,
     STR_COUNT
 } StringID;
 
@@ -294,14 +308,14 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_IF_DEVICE_WONT_BOOT] = { "Instructions if device won't boot", "Instrucciones si el dispositivo no bootea" },
     [STR_REVERT_BACKUP] = { "Revert DTB to original backup", "Revertir DTB al backup original" },
     [STR_NO_BACKUP] = { "No backup available", "Sin backup disponible" },
-    [STR_BACKUP_FAILED] = { "Backup failed. Aborting.", "Backup fallido. Abortando." },
+    [STR_BACKUP_FAILED] = { "DTB backup failed — is /boot writable?", "Backup DTB fallido — ¿/boot es escribible?" },
     [STR_DTB_NOT_FOUND] = { "DTB not found in /boot/", "DTB no encontrado en /boot/" },
     [STR_BIN_NOT_DETECTED] = { "Bin not detected. Reboot device and try again.", "Bin no detectado. Reiniciar dispositivo e intentar de nuevo." },
     [STR_READING_OPP] = { "Reading OPP table...", "Leyendo tabla OPP..." },
     [STR_OPP_NOT_FOUND] = { "No OPP entries found in DTB.", "No se encontraron entradas OPP en el DTB." },
     [STR_TABLE_NOT_FOUND] = { "OPP table not found in DTB.", "Tabla OPP no encontrada en DTB." },
     [STR_PATCHING_DTB] = { "Patching DTB...", "Parcheando DTB..." },
-    [STR_PATCH_FAILED_RESTORE] = { "Patch failed. Restoring backup...", "Patch fallido. Restaurando backup..." },
+    [STR_PATCH_FAILED_RESTORE] = { "fdtput failed. Restoring backup automatically.", "fdtput fallido. Restaurando backup automáticamente." },
     [STR_PATCH_SUCCESS] = { "Patch applied successfully.", "DTB parcheado exitosamente." },
     [STR_SAFETY_NET_ACTIVE] = { "Safety net active (auto-restore if boot fails).", "Safety net activo (auto-restore si boot falla)." },
     [STR_REBOOT_NOW] = { "Reboot now?", "Reboot ahora?" },
@@ -403,6 +417,11 @@ static const I18nEntry I18N[STR_COUNT] = {
     [STR_RAM_OC_REMOVE]      = { "Remove RAM OC", "Eliminar RAM OC" },
     [STR_RAM_OC_REMOVE_DESC] = { "Restore stock 786 MHz max — removes 924 and 1032 MHz OPPs", "Restaurar max stock 786 MHz — elimina OPPs 924 y 1032 MHz" },
     [STR_TUNE_924_VOLT]      = { "Tune 924 MHz voltage", "Ajustar voltaje 924 MHz" },
+    [STR_CPU_OC_BOOTINI]     = { "CPU OC (boot.ini)", "CPU OC (boot.ini)" },
+    [STR_BOOTINI_DESC]       = { "Set max_cpufreq for teacupx kernel", "Fijar max_cpufreq para kernel teacupx" },
+    [STR_BOOTINI_NOT_FOUND]  = { "boot.ini not found in /boot\nIs teacupx kernel installed?", "/boot/boot.ini no encontrado\n¿Kernel teacupx instalado?" },
+    [STR_BOOTINI_CURRENT]    = { "Current", "Actual" },
+    [STR_BOOTINI_APPLIED]    = { "max_cpufreq updated. Reboot to apply.", "max_cpufreq actualizado. Reiniciar para aplicar." },
 };
 
 static int current_lang = LANG_EN;
@@ -733,7 +752,7 @@ static int detect_cpu_oc(int cur_hz) {
             if (v == 0 || v == 1) return v;
         }
     }
-    if (cur_hz <= 1296000) return -1;
+    if (cur_hz <= CPU_STOCK_MAX_MHZ * 1000) return -1;
 
     /* Single bench at current freq — no freq switching needed */
     long long score = quick_lcg_bench(4000);
@@ -765,7 +784,7 @@ static void screen_cpu_freq(void){
     /* Detect whether high freq is real (teacupx kernel) or software-only (stock).
        Runs a ~4s ratio test on first call; cached in OC_DETECT_CACHE afterwards. */
     int oc_real = -1;
-    if (cur_hz > 1296000) {
+    if (cur_hz > CPU_STOCK_MAX_MHZ * 1000) {
         FILE *cf = fopen(OC_DETECT_CACHE, "r");
         int cached = 0;
         if (cf) { int v=-1; fscanf(cf,"%d",&v); fclose(cf); cached=(v==0||v==1); }
@@ -777,12 +796,12 @@ static void screen_cpu_freq(void){
        - configured freq gets tag "SET (fake)" — software value, not silicon reality
        - 1296 MHz gets tag "silicon max" / ACTIVE — where hardware actually runs
        - sel cursor stays on configured freq so user sees it first */
-    int stock_fake = (oc_real == 0 && cur_hz > 1296000);
+    int stock_fake = (oc_real == 0 && cur_hz > CPU_STOCK_MAX_MHZ * 1000);
 
     LItem items[MAX_ITEMS]; int n=0, sel=0;
     for(int i=0;i<nf;i++){
         int mhz=freqs[i]/1000;
-        int fake = (mhz > 1296 && oc_real != 1);
+        int fake = (mhz > CPU_STOCK_MAX_MHZ && oc_real != 1);
         snprintf(items[n].label,sizeof(items[n].label),"%d %s",mhz,S(STR_MHZ));
         if(freqs[i]==cur_hz){
             if (stock_fake) {
@@ -793,7 +812,7 @@ static void screen_cpu_freq(void){
                 strncpy(items[n].tag,S(STR_ACTIVE),sizeof(items[n].tag)-1);
             }
             sel=n;
-        } else if (stock_fake && mhz == 1296) {
+        } else if (stock_fake && mhz == CPU_STOCK_MAX_MHZ) {
             strncpy(items[n].desc,S(STR_CURRENT_MAX_FREQ),sizeof(items[n].desc)-1);
             strncpy(items[n].tag,S(STR_CPU_FREQ_SILICON_MAX),sizeof(items[n].tag)-1);
         } else if (fake) {
@@ -964,6 +983,7 @@ static int dtb_scan_opp(const char *dtb, const char *opp_base,
         if (!vbuf[0]) continue;
         entries[n].freq_hz = freq;
         entries[n].volt_uv = atoi(vbuf);
+        if (entries[n].volt_uv < 100000 || entries[n].volt_uv > 2000000) continue;
         strncpy(entries[n].node, node_path, sizeof(entries[n].node)-1);
         n++;
     }
@@ -1056,6 +1076,50 @@ static void dtb_setup_safety(void) {
 static void dtb_mark_pending(void) {
     system("echo ark | sudo -S touch " DTB_PENDING_FLAG " 2>/dev/null");
     system("echo ark | sudo -S sync 2>/dev/null");
+}
+
+/* Ensure DTB backup exists. Fills bak_out with "<dtb>.bak".
+   Returns 0 if backup already existed, 1 if created, -1 on error (error shown). */
+static int ensure_dtb_backup(const char *dtb, char *bak_out, size_t bak_sz) {
+    snprintf(bak_out, bak_sz, "%s.bak", dtb);
+    if (access(bak_out, F_OK) == 0) return 0;
+    char cmd[640];
+    snprintf(cmd, sizeof(cmd), "echo ark | sudo -S cp '%s' '%s' 2>/dev/null", dtb, bak_out);
+    if (system(cmd) != 0) {
+        show_info("ERROR", S(STR_BACKUP_FAILED));
+        SDL_Delay(2000);
+        return -1;
+    }
+    return 1;
+}
+
+/* Write uv to a single OPP node via fdtput.  triple=1 writes 3-tuple (min typ max),
+   triple=0 writes single value.  Also writes fallback opp-microvolt if bin-specific.
+   Returns 0 on success, non-zero on primary write failure. */
+static int patch_opp_voltage(const char *dtb, const char *node,
+                              const char *bin_prop, int uv, int triple) {
+    char cmd[800];
+    if (triple)
+        snprintf(cmd, sizeof(cmd),
+            "echo ark | sudo -S fdtput -t u '%s' '%s' '%s' %d %d %d 2>/dev/null",
+            dtb, node, bin_prop, uv, uv, uv);
+    else
+        snprintf(cmd, sizeof(cmd),
+            "echo ark | sudo -S fdtput -t u '%s' '%s' '%s' %d 2>/dev/null",
+            dtb, node, bin_prop, uv);
+    int fail = (system(cmd) != 0);
+    if (strcmp(bin_prop, "opp-microvolt") != 0) {
+        if (triple)
+            snprintf(cmd, sizeof(cmd),
+                "echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt %d %d %d 2>/dev/null",
+                dtb, node, uv, uv, uv);
+        else
+            snprintf(cmd, sizeof(cmd),
+                "echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt %d 2>/dev/null",
+                dtb, node, uv);
+        system(cmd);
+    }
+    return fail;
 }
 
 /* ── Confirmation screens (summary + table + warnings + buttons) ──────────── */
@@ -1188,6 +1252,14 @@ static int confirm_screen(const char *title, const char *summary,
     return 0;
 }
 
+/* Extract display bin name from bin_prop: "opp-microvolt-L2" → "L2", "opp-microvolt" → NULL */
+static const char *bin_label(const char *bin_prop) {
+    const char *p = strrchr(bin_prop, '-');
+    if (p && p[1] == 'L' && p[2] >= '0' && p[2] <= '9' && p[3] == '\0')
+        return p + 1;
+    return NULL;
+}
+
 static int confirm_reboot(const char *title, const char *summary) {
     const char *infos[] = {S(STR_REQUIRES_REBOOT)};
     return confirm_screen(title, summary, NULL, NULL, NULL,
@@ -1214,8 +1286,13 @@ static int confirm_cpu_uv(const char *bin_prop, OPPEntry opp[], int n, int offse
     char summary[128];
     char off_str[16];
     fmt_mv(offset_uv < 0 ? -offset_uv : offset_uv, off_str, sizeof(off_str));
-    snprintf(summary, sizeof(summary), "%s %s%s %s %d OPPs", S(STR_APPLY),
-             offset_uv < 0 ? "-" : "+", off_str, S(STR_MILLIVOLTS), n);
+    const char *binlbl = bin_label(bin_prop);
+    if (binlbl)
+        snprintf(summary, sizeof(summary), "Bin %s — %s %s%s %s %d OPPs", binlbl, S(STR_APPLY),
+                 offset_uv < 0 ? "-" : "+", off_str, S(STR_MILLIVOLTS), n);
+    else
+        snprintf(summary, sizeof(summary), "%s %s%s %s %d OPPs", S(STR_APPLY),
+                 offset_uv < 0 ? "-" : "+", off_str, S(STR_MILLIVOLTS), n);
 
     const char *warnings[] = {S(STR_REQUIRES_REBOOT)};
     const char *infos[] = {
@@ -1241,8 +1318,11 @@ static int confirm_cpu_oc(int volt_uv, int has_node, const char *bin_prop) {
     snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", mv, S(STR_MILLIVOLTS)); nr++;
     snprintf(rows[nr].col1, CONFIRM_COL_LEN, "AVS scale");
     snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", S(STR_AVS_UNLOCKED)); nr++;
-    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "Bin prop");
-    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", bin_prop); nr++;
+    {
+        const char *bl = bin_label(bin_prop);
+        snprintf(rows[nr].col1, CONFIRM_COL_LEN, "Chip bin");
+        snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", bl ? bl : "?"); nr++;
+    }
 
     char summary[128];
     if (has_node)
@@ -1274,6 +1354,14 @@ static int confirm_gpu_oc(int volt_uv, int cur_uv, int has_node, const char *bin
     snprintf(rows[nr].col1, CONFIRM_COL_LEN, "600 %s", S(STR_MHZ));
     snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", cur_mv, S(STR_MILLIVOLTS));
     snprintf(rows[nr].col3, CONFIRM_COL_LEN, "%s %s", new_mv, S(STR_MILLIVOLTS)); nr++;
+    {
+        const char *bl = bin_label(bin_prop);
+        if (bl) {
+            snprintf(rows[nr].col1, CONFIRM_COL_LEN, "Chip bin");
+            snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", bl);
+            rows[nr].col3[0] = 0; nr++;
+        }
+    }
 
     char summary[128];
     snprintf(summary, sizeof(summary), "GPU 600 %s @ %s %s (%s)",
@@ -1303,6 +1391,14 @@ static int confirm_ram_oc(int volt_uv, int cur_uv, int has_node, const char *dmc
     snprintf(rows[nr].col1, CONFIRM_COL_LEN, "928 %s", S(STR_MHZ));
     snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s %s", cur_mv, S(STR_MILLIVOLTS));
     snprintf(rows[nr].col3, CONFIRM_COL_LEN, "%s %s", new_mv, S(STR_MILLIVOLTS)); nr++;
+    {
+        const char *bl = bin_label(dmc_bin);
+        if (bl) {
+            snprintf(rows[nr].col1, CONFIRM_COL_LEN, "Chip bin");
+            snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", bl);
+            rows[nr].col3[0] = 0; nr++;
+        }
+    }
 
     char summary[128];
     snprintf(summary, sizeof(summary), "RAM 928 %s @ %s %s (%s)",
@@ -1346,18 +1442,18 @@ static int confirm_restore(void) {
 static int volt_items_build(LItem items[], int min_uv, int max_uv,
                              int *sel_out, int cur_uv) {
     int n = 0; *sel_out = 0;
-    for (int v = max_uv; v >= min_uv && n < VOLT_ITEMS_MAX; v -= 12500) {
+    for (int v = max_uv; v >= min_uv && n < VOLT_ITEMS_MAX; v -= UV_STEP_UV) {
         char lbl[32]; fmt_mv(v, lbl, sizeof(lbl));
         strncat(lbl, " ", sizeof(lbl)-strlen(lbl)-1);
         strncat(lbl, S(STR_MILLIVOLTS), sizeof(lbl)-strlen(lbl)-1);
         strncpy(items[n].label, lbl, 63);
         items[n].desc[0] = 0; items[n].tag[0] = 0;
-        if (cur_uv && abs(v - cur_uv) < 6250) *sel_out = n;
+        if (cur_uv && abs(v - cur_uv) < UV_STEP_UV/2) *sel_out = n;
         n++;
     }
     return n;
 }
-static int volt_from_index(int max_uv, int idx) { return max_uv - idx * 12500; }
+static int volt_from_index(int max_uv, int idx) { return max_uv - idx * UV_STEP_UV; }
 
 /* ── DTB: CPU Fine-Tune (per-OPP voltage) ───────────────────────────────── */
 static void screen_dtb_cpu_finetune(const char *dtb, const char *opp_base,
@@ -1392,7 +1488,7 @@ static void screen_dtb_cpu_finetune(const char *dtb, const char *opp_base,
 
         /* voltage picker for the selected OPP */
         LItem vitems[VOLT_ITEMS_MAX]; int nvsel = 0;
-        int nv = volt_items_build(vitems, OPP_FLOOR_UV, 1350000, &nvsel, opp[real_opp].volt_uv);
+        int nv = volt_items_build(vitems, OPP_FLOOR_UV, CPU_MAX_UV, &nvsel, opp[real_opp].volt_uv);
         char freq_sub[64];
         snprintf(freq_sub, sizeof(freq_sub), "%lld MHz — %s",
                  opp[real_opp].freq_hz / 1000000LL, bin_prop);
@@ -1401,7 +1497,7 @@ static void screen_dtb_cpu_finetune(const char *dtb, const char *opp_base,
         int chosen_v = submenu(S(STR_CPU_FINETUNE), freq_sub, vitems, nv, &nvsel, volt_hint, 1);
         if (chosen_v < 0) continue;
 
-        int new_uv = volt_from_index(1350000, chosen_v);
+        int new_uv = volt_from_index(CPU_MAX_UV, chosen_v);
         if (new_uv == opp[real_opp].volt_uv) continue;
 
         /* confirm */
@@ -1421,25 +1517,12 @@ static void screen_dtb_cpu_finetune(const char *dtb, const char *opp_base,
             continue;
 
         /* backup */
-        char bak[280], cmd[600];
-        snprintf(bak, sizeof(bak), "%s.bak", dtb);
-        if (access(bak, F_OK) != 0) {
-            snprintf(cmd, sizeof(cmd), "echo ark | sudo -S cp '%s' '%s' 2>/dev/null", dtb, bak);
-            if (system(cmd) != 0) { show_info("ERROR", S(STR_BACKUP_FAILED)); SDL_Delay(2000); return; }
-        }
+        char bak[280], cmd[512];
+        if (ensure_dtb_backup(dtb, bak, sizeof(bak)) < 0) return;
         show_info(S(STR_CPU_FINETUNE), S(STR_PATCHING_DTB));
 
         /* patch single OPP — write 3-tuple (min typ max all same) */
-        snprintf(cmd, sizeof(cmd),
-            "echo ark | sudo -S fdtput -t u '%s' '%s' '%s' %d %d %d 2>/dev/null",
-            dtb, opp[real_opp].node, bin_prop, new_uv, new_uv, new_uv);
-        int fail = (system(cmd) != 0);
-        if (!fail && strcmp(bin_prop, "opp-microvolt") != 0) {
-            snprintf(cmd, sizeof(cmd),
-                "echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt %d %d %d 2>/dev/null",
-                dtb, opp[real_opp].node, new_uv, new_uv, new_uv);
-            system(cmd);
-        }
+        int fail = patch_opp_voltage(dtb, opp[real_opp].node, bin_prop, new_uv, 1);
 
         if (!fail) {
             opp[real_opp].volt_uv = new_uv; /* update local state */
@@ -1503,14 +1586,8 @@ static void screen_dtb_cpu_uv(const char *dtb, const char *opp_base,
     if (!confirm_cpu_uv(bin_prop, opp, n, offset_uv)) return;
 
     /* backup */
-    char bak[280]; snprintf(bak, sizeof(bak), "%s.bak", dtb);
-    if (access(bak, F_OK) != 0) {
-        char c[600];
-        snprintf(c, sizeof(c), "echo ark | sudo -S cp '%s' '%s' 2>/dev/null", dtb, bak);
-        if (system(c) != 0) {
-            show_info("ERROR", S(STR_BACKUP_FAILED)); SDL_Delay(2000); return;
-        }
-    }
+    char bak[280];
+    if (ensure_dtb_backup(dtb, bak, sizeof(bak)) < 0) return;
     show_info(S(STR_CPU_UNDERVOLT), S(STR_PATCHING_DTB));
 
     int fail = 0;
@@ -1589,25 +1666,19 @@ static void screen_dtb_cpu_oc(const char *dtb, const char *opp_base,
     }
 
     LItem vitems[VOLT_ITEMS_MAX]; int nvsel = 0;
-    int nv = volt_items_build(vitems, 950000, 1350000, &nvsel,
-                              cur_uv ? cur_uv : 1150000);
+    int nv = volt_items_build(vitems, OPP_FLOOR_UV, CPU_MAX_UV, &nvsel,
+                              cur_uv ? cur_uv : LOGIC_MAX_UV);
     char cpu_oc_hint[128];
     snprintf(cpu_oc_hint,sizeof(cpu_oc_hint),"%s  %s",S(STR_DPAD_VOLTAGE),S(STR_A_APPLY_B_BACK));
     int chosen = submenu(S(STR_CPU_OC_1608), sub, vitems, nv, &nvsel, cpu_oc_hint, 1);
     if (chosen < 0) return;
-    int volt_uv = volt_from_index(1350000, chosen);
+    int volt_uv = volt_from_index(CPU_MAX_UV, chosen);
     char volt_mv[16]; fmt_mv(volt_uv, volt_mv, sizeof(volt_mv));
 
     if (!confirm_cpu_oc(volt_uv, has_node, bin_prop)) return;
 
-    char bak[280]; snprintf(bak, sizeof(bak), "%s.bak", dtb);
-    if (access(bak, F_OK) != 0) {
-        snprintf(cmd, sizeof(cmd),
-            "echo ark | sudo -S cp '%s' '%s' 2>/dev/null", dtb, bak);
-        if (system(cmd) != 0) {
-            show_info("ERROR", S(STR_BACKUP_FAILED)); SDL_Delay(2000); return;
-        }
-    }
+    char bak[280];
+    if (ensure_dtb_backup(dtb, bak, sizeof(bak)) < 0) return;
     show_info(S(STR_CPU_OC_1608), S(STR_PATCHING_DTB));
 
     int fail = 0;
@@ -1621,14 +1692,7 @@ static void screen_dtb_cpu_oc(const char *dtb, const char *opp_base,
         snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' 'rockchip,avs-scale' 0 2>/dev/null",dtb,opp_base);
         system(cmd);
     }
-    snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' '%s' %d %d %d 2>/dev/null",
-             dtb,npath,bin_prop,volt_uv,volt_uv,volt_uv);
-    if(system(cmd)!=0) fail=1;
-    if(strcmp(bin_prop,"opp-microvolt")!=0) {
-        snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt %d %d %d 2>/dev/null",
-                 dtb,npath,volt_uv,volt_uv,volt_uv);
-        system(cmd);
-    }
+    if (patch_opp_voltage(dtb, npath, bin_prop, volt_uv, 1)) fail = 1;
 
     if (!fail) {
         dtb_mark_pending(); dtb_setup_safety();
@@ -1672,21 +1736,18 @@ static void screen_dtb_gpu_oc(const char *dtb, const char *bin_prop) {
     snprintf(sub,sizeof(sub),"%s | %s",has_node?S(STR_NODE_ACTIVE):S(STR_GPU_OC_600),S(STR_SHARED_RAIL));
 
     LItem vitems[VOLT_ITEMS_MAX]; int nvsel=0;
-    int nv = volt_items_build(vitems,950000,1150000,&nvsel,cur_uv?cur_uv:1050000);
+    int nv = volt_items_build(vitems,OPP_FLOOR_UV,LOGIC_MAX_UV,&nvsel,cur_uv?cur_uv:1050000);
     char gpu_oc_hint[128];
     snprintf(gpu_oc_hint,sizeof(gpu_oc_hint),"%s  %s",S(STR_DPAD_VOLTAGE),S(STR_A_APPLY_B_BACK));
     int chosen = submenu(S(STR_GPU_OC_600),S(STR_SHARED_RAIL),vitems,nv,&nvsel,gpu_oc_hint,1);
     if (chosen < 0) return;
-    int volt_uv = volt_from_index(1150000,chosen);
+    int volt_uv = volt_from_index(LOGIC_MAX_UV,chosen);
     char volt_mv[16]; fmt_mv(volt_uv,volt_mv,sizeof(volt_mv));
 
     if (!confirm_gpu_oc(volt_uv, cur_uv, has_node, bin_prop)) return;
 
-    char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
-    if (access(bak,F_OK)!=0) {
-        snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",dtb,bak);
-        if(system(cmd)!=0){show_info("ERROR",S(STR_BACKUP_FAILED));SDL_Delay(2000);return;}
-    }
+    char bak[280];
+    if (ensure_dtb_backup(dtb, bak, sizeof(bak)) < 0) return;
     show_info(S(STR_GPU_OC_600),S(STR_PATCHING_DTB));
     int fail=0;
     char npath[200]; snprintf(npath,sizeof(npath),"%s/opp-600000000",gpu_opp);
@@ -1696,14 +1757,7 @@ static void screen_dtb_gpu_oc(const char *dtb, const char *bin_prop) {
         snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' opp-hz 0 600000000 2>/dev/null",dtb,npath);
         if(system(cmd)!=0) fail=1;
     }
-    snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' '%s' %d 2>/dev/null",
-             dtb,npath,bin_prop,volt_uv);
-    if(system(cmd)!=0) fail=1;
-    if(strcmp(bin_prop,"opp-microvolt")!=0) {
-        snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt %d 2>/dev/null",
-                 dtb,npath,volt_uv);
-        system(cmd);
-    }
+    if (patch_opp_voltage(dtb, npath, bin_prop, volt_uv, 0)) fail = 1;
     if (!fail) {
         dtb_mark_pending(); dtb_setup_safety();
         char msg[80]; snprintf(msg,sizeof(msg),"600 %s @ %s %s aplicado.",S(STR_MHZ),volt_mv,S(STR_MILLIVOLTS));
@@ -1789,11 +1843,8 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
         if (mc==idx_remove_1032) {
             if (!confirm_screen(S(STR_RAM_OC_1032_REMOVE),NULL,NULL,NULL,NULL,NULL,0,
                                 NULL,0,NULL,0,S(STR_APPLY),S(STR_CANCEL))) return;
-            char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
-            if (access(bak,F_OK)!=0){
-                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",dtb,bak);
-                if(system(cmd)!=0){show_info("ERROR",S(STR_BACKUP_FAILED));SDL_Delay(2000);return;}
-            }
+            char bak[280];
+            if (ensure_dtb_backup(dtb, bak, sizeof(bak)) < 0) return;
             show_info(S(STR_RAM_OC_1032_REMOVE),S(STR_PATCHING_DTB));
             snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -r '%s' '%s/opp-1040000000' 2>/dev/null",dtb,dmc_opp);
             if(system(cmd)==0){
@@ -1809,11 +1860,8 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
         if (mc==idx_remove_all) {
             if (!confirm_screen(S(STR_RAM_OC_REMOVE),NULL,NULL,NULL,NULL,NULL,0,
                                 NULL,0,NULL,0,S(STR_APPLY),S(STR_CANCEL))) return;
-            char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
-            if (access(bak,F_OK)!=0){
-                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",dtb,bak);
-                if(system(cmd)!=0){show_info("ERROR",S(STR_BACKUP_FAILED));SDL_Delay(2000);return;}
-            }
+            char bak[280];
+            if (ensure_dtb_backup(dtb, bak, sizeof(bak)) < 0) return;
             show_info(S(STR_RAM_OC_REMOVE),S(STR_PATCHING_DTB));
             int fail=0;
             if (has_1032) {
@@ -1843,24 +1891,20 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
             }
             const char *w1032[]={ S(STR_RAM_OC_1032_WARN1), S(STR_RAM_OC_1032_WARN2), S(STR_RAM_OC_1032_WARN3) };
             LItem vitems2[VOLT_ITEMS_MAX]; int nvsel2=0;
-            volt_items_build(vitems2,950000,1150000,&nvsel2,cur_1032?cur_1032:1150000);
-            int nv2=volt_items_build(vitems2,950000,1150000,&nvsel2,cur_1032?cur_1032:1150000);
+            int nv2=volt_items_build(vitems2,OPP_FLOOR_UV,LOGIC_MAX_UV,&nvsel2,cur_1032?cur_1032:LOGIC_MAX_UV);
             char v1032hint[128];
             snprintf(v1032hint,sizeof(v1032hint),"%s  %s",S(STR_DPAD_VOLTAGE),S(STR_A_APPLY_B_BACK));
             int cv=submenu(S(STR_RAM_OC_1032),S(STR_RAM_OC_1032_DESC),vitems2,nv2,&nvsel2,v1032hint,1);
             if (cv<0) return;
-            int volt_1032=volt_from_index(1150000,cv);
+            int volt_1032=volt_from_index(LOGIC_MAX_UV,cv);
             char mv_1032[16]; fmt_mv(volt_1032,mv_1032,sizeof(mv_1032));
             ConfirmRow rows[2]; int nr=0;
             snprintf(rows[nr].col1,CONFIRM_COL_LEN,"DMC"); snprintf(rows[nr].col2,CONFIRM_COL_LEN,"1032 %s",S(STR_MHZ)); rows[nr].col3[0]=0; nr++;
             snprintf(rows[nr].col1,CONFIRM_COL_LEN,"%s",S(STR_VALUE)); snprintf(rows[nr].col2,CONFIRM_COL_LEN,"%s %s",mv_1032,S(STR_MILLIVOLTS)); rows[nr].col3[0]=0; nr++;
             char t1032[64]; snprintf(t1032,sizeof(t1032),"%s — %s",S(STR_RAM_OC_1032),S(STR_CONFIRM));
             if (!confirm_screen(t1032,NULL,NULL,NULL,NULL,rows,nr,w1032,3,NULL,0,S(STR_APPLY),S(STR_CANCEL))) return;
-            char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
-            if (access(bak,F_OK)!=0){
-                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",dtb,bak);
-                if(system(cmd)!=0){show_info("ERROR",S(STR_BACKUP_FAILED));SDL_Delay(2000);return;}
-            }
+            char bak[280];
+            if (ensure_dtb_backup(dtb, bak, sizeof(bak)) < 0) return;
             show_info(S(STR_RAM_OC_1032),S(STR_PATCHING_DTB));
             int fail=0;
             char npath1032[200]; snprintf(npath1032,sizeof(npath1032),"%s/opp-1040000000",dmc_opp);
@@ -1870,12 +1914,7 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
                 snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' opp-hz 0 1040000000 2>/dev/null",dtb,npath1032);
                 if(system(cmd)!=0) fail=1;
             }
-            snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' '%s' %d 2>/dev/null",dtb,npath1032,dmc_bin,volt_1032);
-            if(system(cmd)!=0) fail=1;
-            if(strcmp(dmc_bin,"opp-microvolt")!=0){
-                snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt %d 2>/dev/null",dtb,npath1032,volt_1032);
-                system(cmd);
-            }
+            if (patch_opp_voltage(dtb, npath1032, dmc_bin, volt_1032, 0)) fail = 1;
             if(!fail){
                 dtb_mark_pending(); dtb_setup_safety();
                 char msg[80]; snprintf(msg,sizeof(msg),"1032 %s @ %s %s",S(STR_MHZ),mv_1032,S(STR_MILLIVOLTS));
@@ -1894,7 +1933,7 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
     snprintf(sub,sizeof(sub),"%s | %s",has_node?S(STR_NODE_ACTIVE):S(STR_RAM_OC_928),S(STR_VCC_DDR_RAIL));
 
     LItem vitems[VOLT_ITEMS_MAX]; int nvsel=0;
-    int nv=volt_items_build(vitems,950000,1150000,&nvsel,cur_uv?cur_uv:1100000);
+    int nv=volt_items_build(vitems,OPP_FLOOR_UV,LOGIC_MAX_UV,&nvsel,cur_uv?cur_uv:1100000);
     char ram_oc_hint[128];
     snprintf(ram_oc_hint,sizeof(ram_oc_hint),"%s  %s",S(STR_DPAD_VOLTAGE),S(STR_A_APPLY_B_BACK));
     int chosen=submenu(S(STR_RAM_OC_928),S(STR_VCC_DDR_RAIL),vitems,nv,&nvsel,ram_oc_hint,1);
@@ -1904,11 +1943,8 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
 
     if (!confirm_ram_oc(volt_uv, cur_uv, has_node, dmc_bin)) return;
 
-    char bak[280]; snprintf(bak,sizeof(bak),"%s.bak",dtb);
-    if (access(bak,F_OK)!=0) {
-        snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",dtb,bak);
-        if(system(cmd)!=0){show_info("ERROR",S(STR_BACKUP_FAILED));SDL_Delay(2000);return;}
-    }
+    char bak[280];
+    if (ensure_dtb_backup(dtb, bak, sizeof(bak)) < 0) return;
     show_info(S(STR_RAM_OC_928),S(STR_PATCHING_DTB));
     int fail=0;
     char npath[200]; snprintf(npath,sizeof(npath),"%s/opp-928000000",dmc_opp);
@@ -1918,14 +1954,7 @@ static void screen_dtb_ram_oc(const char *dtb, const char *bin_prop) {
         snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' opp-hz 0 928000000 2>/dev/null",dtb,npath);
         if(system(cmd)!=0) fail=1;
     }
-    snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' '%s' %d 2>/dev/null",
-             dtb,npath,dmc_bin,volt_uv);
-    if(system(cmd)!=0) fail=1;
-    if(strcmp(dmc_bin,"opp-microvolt")!=0) {
-        snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt %d 2>/dev/null",
-                 dtb,npath,volt_uv);
-        system(cmd);
-    }
+    if (patch_opp_voltage(dtb, npath, dmc_bin, volt_uv, 0)) fail = 1;
     if (!fail) {
         dtb_mark_pending(); dtb_setup_safety();
         char msg[80]; snprintf(msg,sizeof(msg),"928 %s @ %s %s aplicado.",S(STR_MHZ),volt_mv,S(STR_MILLIVOLTS));
@@ -2185,6 +2214,17 @@ static int check_cpu_bench(void) {
     return access(CPU_BENCH_BIN, X_OK) == 0;
 }
 
+static void bench_sample_temp(int *mn, int *mx, int *sm, int *cnt) {
+    int t = read_int(CPU_TEMP);
+    if (t > 0) {
+        t /= 1000;
+        if (*cnt == 0 || t < *mn) *mn = t;
+        if (t > *mx) *mx = t;
+        *sm += t;
+        (*cnt)++;
+    }
+}
+
 typedef struct {
     long long score;
     int done;
@@ -2372,14 +2412,7 @@ static void screen_cpu_benchmark(void) {
 
             Uint32 now = SDL_GetTicks();
             if (now - last_sample >= 2000) {
-                int t = read_int(CPU_TEMP);
-                if (t > 0) {
-                    t /= 1000;
-                    if (st.temp_count == 0 || t < st.temp_min) st.temp_min = t;
-                    if (t > st.temp_max) st.temp_max = t;
-                    st.temp_sum += t;
-                    st.temp_count++;
-                }
+                bench_sample_temp(&st.temp_min, &st.temp_max, &st.temp_sum, &st.temp_count);
                 last_sample = now;
             }
 
@@ -2429,6 +2462,91 @@ static void screen_cpu_benchmark(void) {
     }
 }
 
+/* ── DTB: CPU OC via teacupx boot.ini ───────────────────────────────────── */
+#define BOOTINI_PATH "/boot/boot.ini"
+
+static void screen_dtb_cpu_bootini(void) {
+    if (access(BOOTINI_PATH, R_OK) != 0) {
+        show_info(S(STR_CPU_OC_BOOTINI), S(STR_BOOTINI_NOT_FOUND));
+        SDL_Delay(3000); return;
+    }
+
+    /* Read current max_cpufreq value */
+    char vbuf[32] = "";
+    popen_into("grep -m1 '^max_cpufreq=' " BOOTINI_PATH " 2>/dev/null"
+               " | cut -d= -f2 | tr -d ' \\n\\r'", vbuf, sizeof(vbuf));
+    int cur_val = vbuf[0] ? atoi(vbuf) : 0;
+    /* Detect unit: if value > 100000 it's in Hz; > 5000 → kHz; else → MHz */
+    int unit_khz = (cur_val > 5000);  /* true = value is in kHz (e.g. 1512000) */
+    int cur_mhz = 0;
+    if (cur_val > 0)
+        cur_mhz = unit_khz ? cur_val / 1000 : cur_val;
+
+    static const int freqs_mhz[] = {1512, 1488, 1464, 1440, 1416, 1368};
+    static const int n_freqs = 6;
+
+    LItem items[6]; int sel = 0;
+    for (int i = 0; i < n_freqs; i++) {
+        snprintf(items[i].label, sizeof(items[i].label), "%d %s", freqs_mhz[i], S(STR_MHZ));
+        items[i].desc[0] = 0;
+        if (cur_mhz == freqs_mhz[i])
+            strncpy(items[i].tag, S(STR_ACTIVE), sizeof(items[i].tag)-1);
+        else
+            items[i].tag[0] = 0;
+        if (cur_mhz == freqs_mhz[i]) sel = i;
+    }
+
+    char sub[96];
+    if (cur_mhz > 0)
+        snprintf(sub, sizeof(sub), "%s: %d %s", S(STR_BOOTINI_CURRENT), cur_mhz, S(STR_MHZ));
+    else
+        snprintf(sub, sizeof(sub), "%s", S(STR_BOOTINI_DESC));
+
+    char hint[128];
+    snprintf(hint, sizeof(hint), "%s  %s", S(STR_DPAD_SELECT), S(STR_A_SELECT_B_BACK));
+    int chosen = submenu(S(STR_CPU_OC_BOOTINI), sub, items, n_freqs, &sel, hint, 0);
+    if (chosen < 0) return;
+    int new_mhz = freqs_mhz[chosen];
+
+    /* Confirm */
+    ConfirmRow rows[2]; int nr = 0;
+    char mv_old[16], mv_new[16];
+    snprintf(mv_old, sizeof(mv_old), cur_mhz > 0 ? "%d %s" : "--", cur_mhz, S(STR_MHZ));
+    snprintf(mv_new, sizeof(mv_new), "%d %s", new_mhz, S(STR_MHZ));
+    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "max_cpufreq");
+    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", mv_old);
+    snprintf(rows[nr].col3, CONFIRM_COL_LEN, "%s", mv_new); nr++;
+    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "boot.ini");
+    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", BOOTINI_PATH);
+    rows[nr].col3[0] = 0; nr++;
+
+    const char *warns[] = { S(STR_REQUIRES_REBOOT) };
+    const char *infos[] = { "teacupx kernel required for OC above 1296 MHz" };
+    char title[64]; snprintf(title, sizeof(title), "%s — %s", S(STR_CPU_OC_BOOTINI), S(STR_CONFIRM));
+    if (!confirm_screen(title, NULL, S(STR_PARAMETER), S(STR_ACTUAL_COL), S(STR_NEW_COL),
+                        rows, nr, warns, 1, infos, 1, S(STR_APPLY), S(STR_CANCEL))) return;
+
+    /* Apply — write new value in same unit as original, or kHz if not detected */
+    char cmd[400];
+    int write_val = unit_khz ? new_mhz * 1000 : new_mhz;
+    if (cur_val == 0) { write_val = new_mhz * 1000; }  /* default to kHz if undetected */
+
+    /* Replace existing max_cpufreq line, or append if absent */
+    snprintf(cmd, sizeof(cmd),
+        "echo ark | sudo -S bash -c '"
+        "grep -q \"^max_cpufreq=\" " BOOTINI_PATH " 2>/dev/null"
+        " && sudo sed -i \"s/^max_cpufreq=.*/max_cpufreq=%d/\" " BOOTINI_PATH
+        " || echo \"max_cpufreq=%d\" | sudo tee -a " BOOTINI_PATH " > /dev/null'",
+        write_val, write_val);
+    if (system(cmd) == 0) {
+        show_info(S(STR_CPU_OC_BOOTINI), S(STR_BOOTINI_APPLIED));
+        SDL_Delay(2500);
+    } else {
+        show_info("ERROR", "Failed to write " BOOTINI_PATH);
+        SDL_Delay(2500);
+    }
+}
+
 /* ── DTB: Menu principal ─────────────────────────────────────────────────── */
 static void screen_dtb_main(void) {
     char dtb[256]; strncpy(dtb, dtb_find(), 255);
@@ -2464,7 +2582,9 @@ static void screen_dtb_main(void) {
             snprintf(bin_tag, sizeof(bin_tag), "%s", S(STR_BIN_MISSING));
         }
 
-        LItem items[8]; int n=0;
+        int has_bootini = (access(BOOTINI_PATH, R_OK) == 0);
+
+        LItem items[9]; int n=0;
         strncpy(items[n].label,S(STR_CPU_UNDERVOLT),63);
         strncpy(items[n].desc,S(STR_PATCH_OPP_DTDB),95);
         strncpy(items[n].tag,bin_tag,31); n++;
@@ -2476,6 +2596,14 @@ static void screen_dtb_main(void) {
         strncpy(items[n].label,S(STR_CPU_OC_1608),63);
         strncpy(items[n].desc,S(STR_UNLOCK_1608_DTB),95);
         strncpy(items[n].tag,cpu_oc?S(STR_ACTIVE):"",31); n++;
+
+        int idx_bootini = -1;
+        if (has_bootini) {
+            idx_bootini = n;
+            strncpy(items[n].label,S(STR_CPU_OC_BOOTINI),63);
+            strncpy(items[n].desc,S(STR_BOOTINI_DESC),95);
+            items[n].tag[0]=0; n++;
+        }
 
         strncpy(items[n].label,S(STR_GPU_OC_600),63);
         strncpy(items[n].desc,S(STR_ADD_OPP_600),95);
@@ -2500,7 +2628,11 @@ static void screen_dtb_main(void) {
         int chosen = submenu(S(STR_DTB_TUNING),S(STR_DTB_TUNING_DESC),items,n,&sel,NULL,1);
         if (chosen < 0) return;
 
-        switch(chosen) {
+        if (chosen == idx_bootini) { screen_dtb_cpu_bootini(); continue; }
+
+        /* Remap chosen past the conditional boot.ini slot */
+        int c = (idx_bootini >= 0 && chosen > idx_bootini) ? chosen - 1 : chosen;
+        switch(c) {
             case 0:
                 if (!opp_base[0]) {
                     show_info(S(STR_CPU_UNDERVOLT),S(STR_TABLE_NOT_FOUND));
@@ -2820,14 +2952,7 @@ static void screen_ram_benchmark(void) {
 
             Uint32 now = SDL_GetTicks();
             if (now - last_sample >= 2000) {
-                int t = read_int(CPU_TEMP);
-                if (t > 0) {
-                    t /= 1000;
-                    if (st.temp_count == 0 || t < st.temp_min) st.temp_min = t;
-                    if (t > st.temp_max) st.temp_max = t;
-                    st.temp_sum += t;
-                    st.temp_count++;
-                }
+                bench_sample_temp(&st.temp_min, &st.temp_max, &st.temp_sum, &st.temp_count);
                 last_sample = now;
             }
 
@@ -3106,7 +3231,7 @@ static void create_gpu_runner(void) {
     if (!f) return;
     fprintf(f,
         "#!/bin/bash\n"
-        "export SDL_VIDEO_EGL_DRIVER=/lib/aarch64-linux-gnu/libEGL.so\n"
+        "export SDL_VIDEO_EGL_DRIVER=/lib/aarch64-linux-gnu/libmali-bifrost-g31-rxp0-gbm.so\n"
         "export XDG_RUNTIME_DIR=/run/user/1000\n"
         "export SDL_GAMECONTROLLERCONFIG_FILE=/opt/inttools/gamecontrollerdb.txt\n"
         "GL_LOG=%s\n"

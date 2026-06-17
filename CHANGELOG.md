@@ -1,5 +1,28 @@
 # R36 Tuner Next — Changelog
 
+## v1.8 — 2026-06-17
+
+### teacupx boot.ini integration
+
+- New **CPU OC (boot.ini)** entry in DTB Tuning menu — appears only when `/boot/boot.ini` is detected (teacupx kernel installed)
+- Frequency selector: 1368 / 1416 / 1440 / 1464 / 1488 / 1512 MHz with current value highlighted
+- Writes `max_cpufreq=` to boot.ini; appends the key if not already present
+- Confirm screen before any write; takes effect on next reboot
+
+### GPU benchmark EGL fix
+
+- Fixed GPU benchmark on Panel 4 v22 (and any device where `libEGL.so` points to Mesa/Panfrost): runner script now uses the Mali blob directly, matching the v1.7 launcher fix
+
+### Internal hardening
+
+- OPP voltage scan now rejects out-of-range values from `fdtget` — prevents "0 mV" entries in the voltage table if fdtget returns an empty or malformed value
+- DTB backup and voltage patch code deduplicated into shared helpers
+- Chip bin (L0–L3) now visible in DTB confirm screens
+- More specific error messages for backup and patch failures
+- Magic number constants for all frequency and voltage thresholds
+
+---
+
 ## v1.1 — 2026-06-15
 
 ### Self-contained launcher (no WiFi / no apt needed)
