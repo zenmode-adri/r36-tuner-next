@@ -15,7 +15,7 @@
 
 ### teacupx battery warning
 
-The teacupx DTB sets the battery cutoff threshold to 3000 mV vs 3300 mV in stock dArkOSRE. The device will run 300 mV deeper into the cell before shutting down, leaving less margin against deep discharge if left unattended after power-off. See README for details.
+The teacupx DTB has two battery miscalibrations on dArkOSRE-R36: it ships the RG351P OCV table (wrong cell chemistry, 4.0V vs 4.2V), and sets the low-battery cutoff to 3000 mV instead of 3300 mV. The battery percentage will be inaccurate, and the device runs to the absolute cell minimum before shutting down — leaving no margin against deep discharge from standby current after power-off. See README for details.
 
 ### Internal hardening
 
