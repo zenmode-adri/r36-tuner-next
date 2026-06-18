@@ -92,7 +92,7 @@ Copy the file to the **FAT32 partition** of the SD card (visible on any PC). Ins
 
 ---
 
-## Benchmark results (L2 bin, teacupx kernel)
+## Benchmark results (L2 bin, stock kernel)
 
 | Config | CPU (Mops/30s) | GPU (pts) | RAM write (GB/s) | Peak temp |
 |--------|---------------:|----------:|-----------------:|----------:|
