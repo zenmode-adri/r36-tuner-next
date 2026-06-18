@@ -752,10 +752,9 @@ static int detect_cpu_oc(int cur_hz) {
             if (v == 0 || v == 1) return v;
         }
     }
-    if (cur_hz <= CPU_STOCK_MAX_MHZ * 1000) return -1;
 
     /* teacupx kernel tags all its OPP driver messages with [oga-avs].
-       A single dmesg grep is instant and unambiguous. */
+       Check this first — works even when boot_cpufreq caps us at 1296 MHz. */
     FILE *p = popen("dmesg 2>/dev/null | grep -c '\\[oga-avs\\]'", "r");
     int oga_count = 0;
     if (p) { fscanf(p, "%d", &oga_count); pclose(p); }
@@ -763,6 +762,8 @@ static int detect_cpu_oc(int cur_hz) {
     int result;
     if (oga_count > 0) {
         result = 1;
+    } else if (cur_hz <= CPU_STOCK_MAX_MHZ * 1000) {
+        return -1;
     } else {
         /* Fallback: LCG microbench — stock silicon scores below threshold
            even if PLL is set above 1296 MHz. */
@@ -1635,83 +1636,97 @@ static void screen_dtb_cpu_uv(const char *dtb, const char *opp_base,
     }
 }
 
-/* ── DTB: CPU OC 1608 MHz ────────────────────────────────────────────────── */
+/* ── DTB: CPU OC (teacupx OPPs 1368–1512 MHz) ───────────────────────────── */
 static void screen_dtb_cpu_oc(const char *dtb, const char *opp_base,
                                const char *bin_prop) {
     if (strcmp(bin_prop, "opp-microvolt") == 0) {
         show_info(S(STR_CPU_OC_1608), S(STR_BIN_NOT_DETECTED));
         SDL_Delay(2500); return;
     }
+
+    /* Check if already patched (1368 MHz node as sentinel) */
     char cmd[400], r[32];
     snprintf(cmd, sizeof(cmd),
-        "fdtget '%s' '%s/opp-1608000000' opp-hz 2>/dev/null | head -c 4",
+        "fdtget '%s' '%s/opp-1368000000' opp-hz 2>/dev/null | head -c 4",
         dtb, opp_base);
     popen_into(cmd, r, sizeof(r));
-    int has_node = r[0] != 0;
-
-    int cur_uv = 0;
-    if (has_node) {
-        snprintf(cmd, sizeof(cmd),
-            "fdtget -t u '%s' '%s/opp-1608000000' '%s' 2>/dev/null | awk '{print $1}'",
-            dtb, opp_base, bin_prop);
-        popen_into(cmd, r, sizeof(r)); cur_uv = atoi(r);
-    }
+    int already_patched = r[0] != 0;
 
     char sub[80];
-    if (has_node) {
-        char mv[16]; fmt_mv(cur_uv, mv, sizeof(mv));
-        snprintf(sub, sizeof(sub), "%s: %s %s", S(STR_NODE_ACTIVE), mv, S(STR_MILLIVOLTS));
-    } else {
-        snprintf(sub, sizeof(sub), "%s: %s", S(STR_CPU_OC_1608), S(STR_DTB_TUNING_DESC));
-    }
+    if (already_patched)
+        snprintf(sub, sizeof(sub), "OPPs 1368–1512 MHz: %s", S(STR_NODE_ACTIVE));
+    else
+        snprintf(sub, sizeof(sub), "Adds OPPs: 1368/1440/1464/1488/1512 MHz");
 
-    if (!has_node) {
-        const char *oc_warnings[] = { S(STR_CPU_OC_STOCK_WARN) };
-        const char *oc_infos[]   = { S(STR_CPU_OC_NEEDS_KERNEL), S(STR_CPU_OC_KERNEL_MAX) };
-        if (!confirm_screen(S(STR_CPU_OC_1608), NULL,
-                            NULL, NULL, NULL, NULL, 0,
-                            oc_warnings, 1, oc_infos, 2,
-                            S(STR_CONTINUE), S(STR_CANCEL))) return;
-    }
-
-    LItem vitems[VOLT_ITEMS_MAX]; int nvsel = 0;
-    int nv = volt_items_build(vitems, OPP_FLOOR_UV, CPU_MAX_UV, &nvsel,
-                              cur_uv ? cur_uv : LOGIC_MAX_UV);
-    char cpu_oc_hint[128];
-    snprintf(cpu_oc_hint,sizeof(cpu_oc_hint),"%s  %s",S(STR_DPAD_VOLTAGE),S(STR_A_APPLY_B_BACK));
-    int chosen = submenu(S(STR_CPU_OC_1608), sub, vitems, nv, &nvsel, cpu_oc_hint, 1);
-    if (chosen < 0) return;
-    int volt_uv = volt_from_index(CPU_MAX_UV, chosen);
-    char volt_mv[16]; fmt_mv(volt_uv, volt_mv, sizeof(volt_mv));
-
-    if (!confirm_cpu_oc(volt_uv, has_node, bin_prop)) return;
+    const char *warns[] = { S(STR_REQUIRES_REBOOT) };
+    const char *infos[] = {
+        "Requires teacupx kernel (oga-avs)",
+        "After reboot, set max_cpufreq in CPU OC (boot.ini)"
+    };
+    char title[64]; snprintf(title, sizeof(title), "%s — %s", S(STR_CPU_OC_1608), S(STR_CONFIRM));
+    if (!confirm_screen(title, sub, NULL, NULL, NULL, NULL, 0,
+                        warns, 1, infos, 2, S(STR_APPLY), S(STR_CANCEL))) return;
 
     char bak[280];
     if (ensure_dtb_backup(dtb, bak, sizeof(bak)) < 0) return;
     show_info(S(STR_CPU_OC_1608), S(STR_PATCHING_DTB));
 
+    /* OPP nodes to add — voltages match teacupx px30.dtsi:
+       L0/L1: 1350 mV, L2: 1300 mV, L3: 1250 mV (max 1350 mV) */
+    static const struct { long hz; int l2_uv; int l3_uv; } opps[] = {
+        { 1368000000L, 1300000, 1250000 },
+        { 1440000000L, 1300000, 1250000 },
+        { 1464000000L, 1300000, 1250000 },
+        { 1488000000L, 1300000, 1250000 },
+        { 1512000000L, 1300000, 1250000 },
+    };
     int fail = 0;
-    char npath[200]; snprintf(npath, sizeof(npath), "%s/opp-1608000000", opp_base);
-    if (!has_node) {
-        snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -c '%s' '%s' 2>/dev/null",dtb,npath);
-        if(system(cmd)!=0) fail=1;
-        snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' opp-hz 0 1608000000 2>/dev/null",dtb,npath);
-        if(system(cmd)!=0) fail=1;
-        /* disable AVS OPP stripping */
-        snprintf(cmd,sizeof(cmd),"echo ark | sudo -S fdtput -t u '%s' '%s' 'rockchip,avs-scale' 0 2>/dev/null",dtb,opp_base);
+    for (int i = 0; i < 5 && !fail; i++) {
+        char npath[200];
+        snprintf(npath, sizeof(npath), "%s/opp-%ld", opp_base, opps[i].hz);
+        snprintf(cmd, sizeof(cmd),
+            "echo ark | sudo -S fdtput -c '%s' '%s' 2>/dev/null", dtb, npath);
+        system(cmd);
+        snprintf(cmd, sizeof(cmd),
+            "echo ark | sudo -S fdtput -t u '%s' '%s' opp-hz 0 %ld 2>/dev/null",
+            dtb, npath, opps[i].hz);
+        if (system(cmd) != 0) { fail = 1; break; }
+        snprintf(cmd, sizeof(cmd),
+            "echo ark | sudo -S fdtput -t u '%s' '%s' clock-latency-ns 40000 2>/dev/null",
+            dtb, npath);
+        system(cmd);
+        snprintf(cmd, sizeof(cmd),
+            "echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt "
+            "1350000 1350000 1350000 2>/dev/null", dtb, npath);
+        system(cmd);
+        snprintf(cmd, sizeof(cmd),
+            "echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt-L0 "
+            "1350000 1350000 1350000 2>/dev/null", dtb, npath);
+        system(cmd);
+        snprintf(cmd, sizeof(cmd),
+            "echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt-L1 "
+            "1350000 1350000 1350000 2>/dev/null", dtb, npath);
+        system(cmd);
+        snprintf(cmd, sizeof(cmd),
+            "echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt-L2 "
+            "%d %d 1350000 2>/dev/null", dtb, npath, opps[i].l2_uv, opps[i].l2_uv);
+        system(cmd);
+        snprintf(cmd, sizeof(cmd),
+            "echo ark | sudo -S fdtput -t u '%s' '%s' opp-microvolt-L3 "
+            "%d %d 1350000 2>/dev/null", dtb, npath, opps[i].l3_uv, opps[i].l3_uv);
         system(cmd);
     }
-    if (patch_opp_voltage(dtb, npath, bin_prop, volt_uv, 1)) fail = 1;
 
     if (!fail) {
         dtb_mark_pending(); dtb_setup_safety();
-        char msg[80]; snprintf(msg,sizeof(msg),"CPU OC @ %s %s aplicado.",volt_mv,S(STR_MILLIVOLTS));
-        if (confirm_reboot(S(STR_OC_PATCHED), msg))
+        if (confirm_reboot(S(STR_OC_PATCHED),
+                "OPPs 1368-1512 MHz added. Use CPU OC (boot.ini) to activate."))
             do_reboot();
     } else {
         show_info("ERROR", S(STR_PATCH_FAILED_RESTORE));
         SDL_Delay(1500);
-        snprintf(cmd,sizeof(cmd),"echo ark | sudo -S cp '%s' '%s' 2>/dev/null",bak,dtb);
+        snprintf(cmd, sizeof(cmd),
+            "echo ark | sudo -S cp '%s' '%s' 2>/dev/null", bak, dtb);
         system(cmd);
     }
 }
@@ -2480,21 +2495,20 @@ static void screen_dtb_cpu_bootini(void) {
         SDL_Delay(3000); return;
     }
 
-    /* Read current max_cpufreq value */
+    /* Read current max_cpufreq value from inside setenv bootargs */
     char vbuf[32] = "";
-    popen_into("grep -m1 '^max_cpufreq=' " BOOTINI_PATH " 2>/dev/null"
-               " | cut -d= -f2 | tr -d ' \\n\\r'", vbuf, sizeof(vbuf));
+    popen_into("grep -o 'max_cpufreq=[0-9]*' " BOOTINI_PATH " 2>/dev/null"
+               " | head -1 | cut -d= -f2 | tr -d ' \\n\\r'", vbuf, sizeof(vbuf));
     int cur_val = vbuf[0] ? atoi(vbuf) : 0;
-    /* Detect unit: if value > 100000 it's in Hz; > 5000 → kHz; else → MHz */
-    int unit_khz = (cur_val > 5000);  /* true = value is in kHz (e.g. 1512000) */
+    /* teacupx uses MHz (1512); handle legacy kHz values gracefully */
     int cur_mhz = 0;
-    if (cur_val > 0)
-        cur_mhz = unit_khz ? cur_val / 1000 : cur_val;
+    if (cur_val > 5000)       cur_mhz = cur_val / 1000;
+    else if (cur_val > 0)     cur_mhz = cur_val;
 
-    static const int freqs_mhz[] = {1512, 1488, 1464, 1440, 1416, 1368};
-    static const int n_freqs = 6;
+    static const int freqs_mhz[] = {1512, 1488, 1464, 1440, 1368};
+    static const int n_freqs = 5;
 
-    LItem items[6]; int sel = 0;
+    LItem items[5]; int sel = 0;
     for (int i = 0; i < n_freqs; i++) {
         snprintf(items[i].label, sizeof(items[i].label), "%d %s", freqs_mhz[i], S(STR_MHZ));
         items[i].desc[0] = 0;
@@ -2518,13 +2532,16 @@ static void screen_dtb_cpu_bootini(void) {
     int new_mhz = freqs_mhz[chosen];
 
     /* Confirm */
-    ConfirmRow rows[2]; int nr = 0;
+    ConfirmRow rows[3]; int nr = 0;
     char mv_old[16], mv_new[16];
     snprintf(mv_old, sizeof(mv_old), cur_mhz > 0 ? "%d %s" : "--", cur_mhz, S(STR_MHZ));
     snprintf(mv_new, sizeof(mv_new), "%d %s", new_mhz, S(STR_MHZ));
     snprintf(rows[nr].col1, CONFIRM_COL_LEN, "max_cpufreq");
     snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", mv_old);
     snprintf(rows[nr].col3, CONFIRM_COL_LEN, "%s", mv_new); nr++;
+    snprintf(rows[nr].col1, CONFIRM_COL_LEN, "boot_cpufreq");
+    snprintf(rows[nr].col2, CONFIRM_COL_LEN, "1296 %s", S(STR_MHZ));
+    snprintf(rows[nr].col3, CONFIRM_COL_LEN, "1296 %s", S(STR_MHZ)); nr++;
     snprintf(rows[nr].col1, CONFIRM_COL_LEN, "boot.ini");
     snprintf(rows[nr].col2, CONFIRM_COL_LEN, "%s", BOOTINI_PATH);
     rows[nr].col3[0] = 0; nr++;
@@ -2535,18 +2552,21 @@ static void screen_dtb_cpu_bootini(void) {
     if (!confirm_screen(title, NULL, S(STR_PARAMETER), S(STR_ACTUAL_COL), S(STR_NEW_COL),
                         rows, nr, warns, 1, infos, 1, S(STR_APPLY), S(STR_CANCEL))) return;
 
-    /* Apply — write new value in same unit as original, or kHz if not detected */
-    char cmd[400];
-    int write_val = unit_khz ? new_mhz * 1000 : new_mhz;
-    if (cur_val == 0) { write_val = new_mhz * 1000; }  /* default to kHz if undetected */
-
-    /* Replace existing max_cpufreq line, or append if absent */
+    /* Apply — write max_cpufreq + boot_cpufreq inside setenv bootargs */
+    char cmd[512];
+    /* Step 1: strip both params from everywhere (standalone lines + inside bootargs) */
     snprintf(cmd, sizeof(cmd),
         "echo ark | sudo -S bash -c '"
-        "grep -q \"^max_cpufreq=\" " BOOTINI_PATH " 2>/dev/null"
-        " && sudo sed -i \"s/^max_cpufreq=.*/max_cpufreq=%d/\" " BOOTINI_PATH
-        " || echo \"max_cpufreq=%d\" | sudo tee -a " BOOTINI_PATH " > /dev/null'",
-        write_val, write_val);
+        "sed -i \"/^max_cpufreq=/d; /^boot_cpufreq=/d\" " BOOTINI_PATH " 2>/dev/null; "
+        "sed -Ei \"s/ *max_cpufreq=[0-9]+//g; s/ *boot_cpufreq=[0-9]+//g\" " BOOTINI_PATH
+        "'");
+    system(cmd);
+    /* Step 2: insert both before closing quote of setenv bootargs */
+    snprintf(cmd, sizeof(cmd),
+        "echo ark | sudo -S sed -Ei "
+        "\"s/(setenv bootargs \\\"[^\\\"]*)\\\"/\\\\1 max_cpufreq=%d boot_cpufreq=1296\\\"/\" "
+        BOOTINI_PATH,
+        new_mhz);
     if (system(cmd) == 0) {
         show_info(S(STR_CPU_OC_BOOTINI), S(STR_BOOTINI_APPLIED));
         SDL_Delay(2500);
@@ -2574,7 +2594,7 @@ static void screen_dtb_main(void) {
     int sel = 0;
     while (running) {
         char r[16];
-        popen_into("grep -q 1608000 /sys/devices/system/cpu/cpu0/cpufreq/"
+        popen_into("grep -q 1368000 /sys/devices/system/cpu/cpu0/cpufreq/"
                    "scaling_available_frequencies 2>/dev/null && echo yes", r, sizeof(r));
         int cpu_oc = strcmp(r,"yes")==0;
         popen_into("grep -q 600000000 /sys/class/devfreq/ff400000.gpu/"
