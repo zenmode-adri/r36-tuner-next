@@ -92,13 +92,17 @@ Copy the file to the **FAT32 partition** of the SD card (visible on any PC). Ins
 
 ---
 
-## Tested results (L2 bin)
+## Benchmark results (L2 bin, teacupx kernel)
 
-| Component | Stock | OC + UV |
-|-----------|-------|---------|
-| CPU (vdd_arm) | 1300 mV @ 1296 MHz | 1175 mV — OC requires [teacupx](https://github.com/teacupx/overclock-r36s) |
-| GPU (vdd_logic) | 1100 mV @ 520 MHz | 1025 mV @ 600 MHz |
-| RAM (vdd_logic) | ~1025 mV @ 786 MHz | 987.5 mV @ 924 MHz |
+| Config | CPU (Mops/30s) | GPU (pts) | RAM write (GB/s) | Peak temp |
+|--------|---------------:|----------:|-----------------:|----------:|
+| Stock | 25.8K | 563 | 5.07 | 60 °C |
+| + CPU undervolt | 25.8K | 559 | — | 50 °C |
+| + GPU OC 600 MHz | — | 598 | — | 51 °C |
+| + RAM OC 928 MHz | — | 621 | 5.83 | 55 °C |
+| + RAM OC 1040 MHz | — | **631** | **6.67** | **52 °C** |
+
+> CPU undervolt cuts peak temps by ~10 °C with no performance cost. Full config (CPU UV + GPU OC 600 MHz + RAM OC 1040 MHz) runs cooler than stock despite higher clocks.
 
 > Results represent one chip. Silicon lottery applies.
 > Full voltage tables for all bins: [docs/opp-research.md](https://github.com/zenmode-adri/r36-tuner/blob/master/docs/opp-research.md)
@@ -116,15 +120,6 @@ Copy the file to the **FAT32 partition** of the SD card (visible on any PC). Ins
 Requires **1150 mV** on `vdd_logic` (PMIC ceiling — no UV margin at this frequency).
 
 > **RAM silicon lottery:** 1032 MHz stability depends on your specific RAM chips. Some units will run it fine; others may crash or show corruption under memory pressure. If unstable, drop back to 924 MHz — it has proven headroom for undervolting and is the recommended OC target.
-
-### GPU OC glmark2
-
-| Config | Score | GPU MHz | Peak temp |
-|--------|------:|--------:|----------:|
-| Stock | 560 pts | 520 MHz | 51 °C |
-| GPU OC | **620 pts** | **600 MHz** | 51 °C |
-
-> Tested with thermal pad. GPU undervolt offsets the extra heat from OC — temps stay close to stock.
 
 ---
 
