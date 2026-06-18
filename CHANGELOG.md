@@ -6,6 +6,10 @@
 
 - Fixed launcher being killed by systemd on dArkOSRE trixie (cgroupsv2 unified hierarchy). When the launcher calls `systemctl stop emulationstation`, systemd kills all processes in the ES service cgroup — including our script. `setsid` alone does not escape cgroupsv2 because child processes inherit the cgroup from the parent, not from the session. Fix: write the launcher PID to `/sys/fs/cgroup/cgroup.procs` (root cgroup) before calling `setsid`; the setsid child then inherits the root cgroup and is not affected when the ES service cgroup is torn down.
 
+### GPU benchmark fix
+
+- Fixed GPU benchmark failing with "glmark2 not found". The check and runner were pointing to `/usr/bin/glmark2-es2-drm` (apt path, not installed). Corrected to `/usr/local/bin/glmark2-es2-drm-legacy` with data path `/usr/local/share/glmark2data` — both embedded in the launcher and extracted on first run.
+
 ---
 
 ## v1.8 — 2026-06-17
