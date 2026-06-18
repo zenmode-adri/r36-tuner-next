@@ -743,7 +743,7 @@ static long long quick_lcg_bench(Uint32 ms) {
    Threshold at 10% above stock reference; bad-cooling stock always stays below. */
 #define OC_REF_STOCK_M 1024LL  /* M ops in 4s on stock silicon above 1296 MHz */
 
-/* Returns 1=real OC (teacupx kernel), 0=stock (fake above 1296 MHz), -1=error */
+/* Returns 1=real OC (teacupx kernel), 0=stock (fake above 1296 MHz), -1=unknown */
 static int detect_cpu_oc(int cur_hz) {
     {
         FILE *f = fopen(OC_DETECT_CACHE, "r");
@@ -754,13 +754,22 @@ static int detect_cpu_oc(int cur_hz) {
     }
     if (cur_hz <= CPU_STOCK_MAX_MHZ * 1000) return -1;
 
-    /* Single bench at current freq — no freq switching needed */
-    long long score = quick_lcg_bench(4000);
-    long long score_M = score / 1000000LL;
+    /* teacupx kernel tags all its OPP driver messages with [oga-avs].
+       A single dmesg grep is instant and unambiguous. */
+    FILE *p = popen("dmesg 2>/dev/null | grep -c '\\[oga-avs\\]'", "r");
+    int oga_count = 0;
+    if (p) { fscanf(p, "%d", &oga_count); pclose(p); }
 
-    /* Scale reference to match actual bench duration (quick_lcg_bench targets ms) */
-    long long threshold_M = OC_REF_STOCK_M * 110 / 100; /* +10% above stock */
-    int result = (score_M > threshold_M) ? 1 : 0;
+    int result;
+    if (oga_count > 0) {
+        result = 1;
+    } else {
+        /* Fallback: LCG microbench — stock silicon scores below threshold
+           even if PLL is set above 1296 MHz. */
+        long long score_M = quick_lcg_bench(4000) / 1000000LL;
+        long long threshold_M = OC_REF_STOCK_M * 110 / 100;
+        result = (score_M > threshold_M) ? 1 : 0;
+    }
 
     FILE *f = fopen(OC_DETECT_CACHE, "w");
     if (f) { fprintf(f, "%d\n", result); fclose(f); }
